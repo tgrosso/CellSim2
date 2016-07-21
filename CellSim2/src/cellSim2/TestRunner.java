@@ -29,12 +29,15 @@ import java.io.BufferedReader;
 
 import java.util.LinkedHashMap;
 import java.util.Arrays;
+import java.util.Map.Entry;
+import java.util.Set;
 
 import java.io.IOException;
 
 
 public class TestRunner {
 	public static File dataDir = null;
+	public static String[] params = null;
 
 	/**
 	 * This class runs one or more simulations and is the class used to run the program. 
@@ -48,7 +51,6 @@ public class TestRunner {
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		System.out.println("Number of arguments: " + args.length);
 	    if (args.length != 2){
 	    	System.err.println("Two variables expected. " + args.length + " found.");
 	    	System.err.println("Usage: DEFAULT_FILE VAR_FILE");
@@ -78,8 +80,8 @@ public class TestRunner {
 						System.err.println("Input was: " + line);
 						continue;
 					}
-					String value = valueVar[0];
-					String var = valueVar[1];
+					String value = valueVar[1];
+					String var = valueVar[0];
 					if (value == null || var == null){
 						System.err.println("Badly formatted input. Variable <tab>value.");
 						System.err.println("Input was: " + line);
@@ -96,6 +98,14 @@ public class TestRunner {
 			System.err.println("Error reading DEFAULT_VALUE file. (" + defaultFile + ").");
 			System.err.println(e.toString());
 		}
+	    
+	    //DEBUGGING - Print list of default values
+	    System.out.println("Values in default map:");
+	    for(Entry<String, String> e : defaultMap.entrySet()) {
+	        String var = e.getKey();
+	        String val = e.getValue();
+	        System.out.println("\t"+var + ": " + val);
+	    }
 	    
 	   //args[1], PARAM_FILE should be a valid text file with parameters and test values
 	    //The parameters must come from the DEFAULT_FILE list of parameters
@@ -135,7 +145,52 @@ public class TestRunner {
 			System.err.println(e.toString());
 		}
 	    
+	    //DEBUGGING - Print list of parameter values
+	    System.out.println("Values in param map:");
+	    for(Entry<String, String[]> e : paramMap.entrySet()) {
+	        String var = e.getKey();
+	        String[] val = e.getValue();
+	        System.out.print("\t"+var + ": \t");
+	        for (int i = 0; i < val.length; i++){
+	        	System.out.print(val[i] + " ");
+	        }
+	        System.out.println("");
+	    }
+	    
+	    //Create testing text files
+	    //Get an array of the parameter keys
+	    Set<String> paramSet = paramMap.keySet();
+	    String[] params = paramSet.toArray(new String[0]);
+	    runTests(paramMap, params, null, 0);
 
+	}//end main
+	
+	private static void runTests(LinkedHashMap<String, String[]> paramMap, String[] params, int[] value_ids, int my_id){
+		if (my_id >= params.length){
+			//all value for parameters are set
+			for (int i = 0; i < params.length; i++){
+				String[] vals = (String[])paramMap.get(params[i]);
+				String val = vals[value_ids[i]];
+				//TODO Unit test - value_ids should not be null here
+				System.out.print(params[i] + ": " + val + " ");
+			}
+			System.out.println("");
+			return;
+		}
+		int my_vals_len = ((String[])paramMap.get(params[my_id])).length;
+		int old_len = 0;
+		if (value_ids != null){
+			old_len = value_ids.length;
+		}
+		int[] new_ids = new int[]{0};
+		if (value_ids != null){
+			new_ids = Arrays.copyOf(value_ids, old_len+1);
+		}
+		for (int i = 0; i < my_vals_len; i++){
+			new_ids[old_len] = i;
+			runTests(paramMap, params, new_ids, my_id+1);
+		}
+		
+		
 	}
-
 }
