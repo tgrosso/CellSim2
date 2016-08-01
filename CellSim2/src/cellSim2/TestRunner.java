@@ -24,20 +24,35 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.io.BufferedReader;
-//import java.io.PrintWriter;
+import java.io.PrintWriter;
 //import java.util.Date;
 
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map.Entry;
 import java.util.Set;
+
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import java.io.IOException;
 
 
 public class TestRunner {
-	public static File dataDir = null;
-	public static String[] params = null;
+	private static File outputDir = null;
+	private static int numRuns = 1;
+	private static LinkedHashMap<String, String> defaultMap;
+	private static LinkedHashMap<String, String[]> paramMap;
+	private static LinkedHashMap<String, Integer> dirNames;
+	private static ArrayList<SimGenerator> generators;
+	static{
+		dirNames = new LinkedHashMap<String, Integer>();
+		generators = new ArrayList<SimGenerator>();
+		defaultMap = new LinkedHashMap<String, String>();
+		paramMap = new LinkedHashMap<String, String[]>();
+	}
 
 	/**
 	 * This class runs one or more simulations and is the class used to run the program. 
@@ -57,13 +72,20 @@ public class TestRunner {
 	    	System.exit(1);
 	    }
 	    
+	    File pf = new File(args[1]);
+	    outputDir = new File(pf.getParent());
+	    if (!outputDir.exists() || !outputDir.isDirectory()){
+	    	System.err.println("Cannot write to Param File Directory!");
+	    	System.err.println("Cannot continue without space for output");
+	    	System.exit(2);
+	    }
+	    
 	    FileInputStream fis;
 	    InputStreamReader isr;
 	    BufferedReader br;
 	    
 	    //args[0], DEFAULT_FILE should be a valid text file with variable default values
 	    //read in all non-blank, non-commented lines into a LinkedHashMap
-	    LinkedHashMap<String, String> defaultMap = new LinkedHashMap<String, String>();
 	    String defaultFile = args[0];
 	    
 	    try{
@@ -87,6 +109,10 @@ public class TestRunner {
 						System.err.println("Input was: " + line);
 						continue;
 					}
+					if (!Defaults.variableExists(var)){
+						System.err.println("Varible " + var + " does not exist.");
+						continue;
+					}
 					defaultMap.put(var, value);
 				}
 			}
@@ -100,23 +126,33 @@ public class TestRunner {
 		}
 	    
 	    //DEBUGGING - Print list of default values
-	    System.out.println("Values in default map:");
-	    for(Entry<String, String> e : defaultMap.entrySet()) {
-	        String var = e.getKey();
-	        String val = e.getValue();
-	        System.out.println("\t"+var + ": " + val);
-	    }
+	    // System.out.println("Values in default map:");
+	    //for(Entry<String, String> e : defaultMap.entrySet()) {
+	    //   String var = e.getKey();
+	    //    String val = e.getValue();
+	    //    System.out.println("\t"+var + ": " + val);
+	    //}
 	    
 	   //args[1], PARAM_FILE should be a valid text file with parameters and test values
-	    //The parameters must come from the DEFAULT_FILE list of parameters
+	    //The first line should be the number of runs that should be performed and must contain a positive integer
 	    //The format of the file shout be parameter<tab>value_1<tab>value_2<tab>...
-	    LinkedHashMap<String, String[]> paramMap = new LinkedHashMap<String, String[]>();
 	    String paramFile = args[1];
 	    try{
 			fis = new FileInputStream(paramFile);
 			isr = new InputStreamReader(fis);
 			br = new BufferedReader(isr);
 			String line;
+			
+			if ((line = br.readLine()) != null){
+				try{
+					numRuns = Integer.parseInt(line);
+				}
+				catch (NumberFormatException e){
+					System.err.println("First line of paramfile needs positive integer for number of runs");
+					System.err.println("Found: " + line);
+					System.err.println("Ignoring this line. Default number of runs is " + numRuns);
+				}
+			}
 			
 			while ((line = br.readLine()) != null) {
 				if (line.length() > 0 && !line.contains("\\\\")){
@@ -126,9 +162,8 @@ public class TestRunner {
 						System.err.println("Input was: " + line);
 						continue;
 					}
-					if (!defaultMap.containsKey(paramVar[0])){
-						System.err.println("This parameter is not in the default value file.");
-						System.err.println("Parameter was: " + paramVar[0]);
+					if (!Defaults.variableExists(paramVar[0])){
+						System.err.println("Varible " + paramVar[0] + " does not exist.");
 						continue;
 					}
 					String param = paramVar[0];
@@ -146,51 +181,143 @@ public class TestRunner {
 		}
 	    
 	    //DEBUGGING - Print list of parameter values
-	    System.out.println("Values in param map:");
-	    for(Entry<String, String[]> e : paramMap.entrySet()) {
-	        String var = e.getKey();
-	        String[] val = e.getValue();
-	        System.out.print("\t"+var + ": \t");
-	        for (int i = 0; i < val.length; i++){
-	        	System.out.print(val[i] + " ");
-	        }
-	        System.out.println("");
-	    }
+	    //System.out.println("Values in param map:");
+	    //for(Entry<String, String[]> e : paramMap.entrySet()) {
+	    //    String var = e.getKey();
+	    //    String[] val = e.getValue();
+	    //    System.out.print("\t"+var + ": \t");
+	    //    for (int i = 0; i < val.length; i++){
+	    //    	System.out.print(val[i] + " ");
+	    //    }
+	    //    System.out.println("");
+	    //}
 	    
 	    //Create testing text files
 	    //Get an array of the parameter keys
 	    Set<String> paramSet = paramMap.keySet();
 	    String[] params = paramSet.toArray(new String[0]);
-	    runTests(paramMap, params, null, 0);
+	    for (int i = 0; i < numRuns; i++){
+	    	runTests(paramMap, params, null, 0, i);
+	    	//Now task list is full
+	    	ExecutorService executor = Executors.newCachedThreadPool();
+	    	for (int j = 0; j < generators.size(); j++){
+	    		executor.execute(generators.get(j));
+	    	}
+	    	executor.shutdown();
+	    	try{
+				boolean finished = executor.awaitTermination(5, TimeUnit.MINUTES);
+				if (finished){
+					System.out.println("Threads completed");
+				}
+				else{
+					System.out.println("Timeout happened first!");
+				}
+			}
+			catch(InterruptedException e){
+				System.out.println(e.toString());
+			}	    	
+	    	generators.clear();
+	    	dirNames.clear();
+	    }
 
 	}//end main
 	
-	private static void runTests(LinkedHashMap<String, String[]> paramMap, String[] params, int[] value_ids, int my_id){
-		if (my_id >= params.length){
+	private static void runTests(LinkedHashMap<String, String[]> paramMap, String[] params, int[] valueIds, int myId, int runNum){
+		if (myId >= params.length){
 			//all value for parameters are set
+			
+			//make a directory for this set of parameters
+			String dirName = "defaults_";
+			if (params.length > 0){
+				dirName = "";
+			}
 			for (int i = 0; i < params.length; i++){
 				String[] vals = (String[])paramMap.get(params[i]);
-				String val = vals[value_ids[i]];
+				String val = vals[valueIds[i]];
 				//TODO Unit test - value_ids should not be null here
-				System.out.print(params[i] + ": " + val + " ");
+				//System.out.print(params[i] + ": " + val + " ");
+				String var = params[i];
+				if (var.length()>=4){
+					var = var.substring(0, 4);
+				}
+				dirName = dirName + var + "_" + val + "_";
 			}
-			System.out.println("");
+			dirName = dirName.substring(0, dirName.length()-1);//drop the trailing _
+			if (!dirNames.containsKey(dirName)){
+				dirNames.put(dirName, new Integer(1));
+			}
+			else{
+				int v = dirNames.get(dirName);
+				dirName = dirName + "(" + v + ")";
+				dirNames.replace(dirName, new Integer(v+1));
+			}
+			//System.out.println("DirectoryName: " + dirName + " run " + runNum);
+			File paramDir = new File(outputDir, dirName);
+			if (!paramDir.exists()){
+				paramDir.mkdir();
+			}
+			//If this is the first run,
+			//put a file into this directory with the contents of the default parameters
+			//substituting these parameter values
+			String fileName = "inputFile.txt";
+			File infile = new File(paramDir, fileName);
+			if (runNum == 0){
+				try{
+					PrintWriter pw = new PrintWriter(infile);
+					
+					//First the current parameters
+					for (int i = 0; i < params.length; i++){
+						String[] vals = (String[])paramMap.get(params[i]);
+						String val = vals[valueIds[i]];
+						pw.println(params[i] + "\t" + val);
+					}
+					
+					//Then the rest of the defaults
+					for(Entry<String, String> e : defaultMap.entrySet()) {
+				        String var = e.getKey();
+				        String val = e.getValue();
+				        if (!paramMap.containsKey(var)){
+				        	pw.println(var + "\t" + val);
+				        }
+				    }
+					pw.close();
+				}
+				catch(IOException e){
+					System.err.println("Error: " + e.toString());
+					System.err.println("Could not create parameter input files in directory: " + paramDir.toString());;
+					System.err.println("Cannot proceed");
+					System.exit(3);
+				}
+			}
+			
+			//Now create a directory for this run
+			String runString = "run_" + runNum;
+			File runDir = new File(paramDir, runString);
+			if (!runDir.exists()){
+				runDir.mkdir();
+			}
+			
+			//Now make a new SimGenerator for this process
+			generators.add(new SimGenerator(infile, runDir));
+			
 			return;
 		}
-		int my_vals_len = ((String[])paramMap.get(params[my_id])).length;
-		int old_len = 0;
-		if (value_ids != null){
-			old_len = value_ids.length;
-		}
-		int[] new_ids = new int[]{0};
-		if (value_ids != null){
-			new_ids = Arrays.copyOf(value_ids, old_len+1);
-		}
-		for (int i = 0; i < my_vals_len; i++){
-			new_ids[old_len] = i;
-			runTests(paramMap, params, new_ids, my_id+1);
-		}
 		
-		
+		//Params not filled yet. Recursive call to keep filling
+		int myValsLen = ((String[])paramMap.get(params[myId])).length;
+		int oldLen = 0;
+		if (valueIds != null){
+			oldLen = valueIds.length;
+		}
+		int[] newIds = new int[]{0};
+		if (valueIds != null){
+			newIds = Arrays.copyOf(valueIds, oldLen+1);
+		}
+		for (int i = 0; i < myValsLen; i++){
+			newIds[oldLen] = i;
+			runTests(paramMap, params, newIds, myId+1, runNum);
+		}
 	}
+	
+	
 }
