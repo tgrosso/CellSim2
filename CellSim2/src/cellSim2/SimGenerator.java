@@ -25,11 +25,16 @@ import java.io.BufferedReader;
 import java.io.PrintWriter;
 import java.io.IOException;
 
+import com.bulletphysics.demos.opengl.LWJGL;
+import com.bulletphysics.demos.opengl.GLDebugDrawer;
+
+import org.lwjgl.LWJGLException;
 
 
 public class SimGenerator implements Runnable{
 	private File inputFile;
 	private File outputDir;
+	private String[] args = {""};
 	
 	public SimGenerator(File in, File out){
 		inputFile = in;
@@ -40,19 +45,15 @@ public class SimGenerator implements Runnable{
 		System.out.println("Sim Generator Is Running");
 		System.out.println("Input File: " + inputFile.toString());
 		System.out.println("Output Directory: " + outputDir.toString());
+		Simulation sim = new Simulation(LWJGL.getGL());
+		sim.initPhysics();
+		sim.getDynamicsWorld().setDebugDrawer(new GLDebugDrawer(LWJGL.getGL()));
+
 		try{
-			BufferedReader br = new BufferedReader(new FileReader(inputFile));
-			PrintWriter pw = new PrintWriter(new File(outputDir, "testing.txt"));
-			String line = "";
-			while (line != null){
-				line = br.readLine();
-				pw.println(line);
-			}
-			br.close();
-			pw.close();
+			LWJGL.main(args, 800, 800, "Cell Simulation", sim);
 		}
-		catch(IOException e){
-			System.out.println(e.toString());
+		catch(LWJGLException e){
+			System.err.println("Could not run simulation.  Error: " + e.toString());
 		}
 	}
 

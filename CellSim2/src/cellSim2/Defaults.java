@@ -28,13 +28,26 @@ public class Defaults {
 	
 	private static final HashMap<String, String> defaults = new HashMap<String, String>();
 	static{
-		defaults.put("numCells", "5");
-		defaults.put("cellDetailLevel", "1");
 		defaults.put("TimeZone", "GMT");
 		defaults.put("channelWidth", "600");
 		defaults.put("screenWidth", "900");
 		defaults.put("screenHeight", "600");
 		defaults.put("endTime", "30");
+		defaults.put("numCells", "5");
+		defaults.put("cellDetailLevel", "1");
+	}
+	
+	private static final HashMap<String, String> cellDefaults = new HashMap<String, String>();
+	static{
+		cellDefaults.put("Name", "Unnamed Cell Type");
+		cellDefaults.put("numCells", "5");
+		cellDefaults.put("cellDetailLevel", "1");
+		cellDefaults.put("radius", "20");
+	}
+	
+	private static final HashMap<String, String> proteinDefaults = new HashMap<String, String>();
+	static{
+		proteinDefaults.put("Name", "No Name");
 	}
 	
 	private HashMap<String, String> currentVals;
