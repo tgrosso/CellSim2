@@ -19,22 +19,32 @@
 
 package cellSim2;
 
-import java.util.HashMap;
+
 import java.io.PrintStream;
+import java.lang.reflect.Field;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map.Entry;
+import javax.vecmath.Vector3f;
 
 
 public class Defaults {
 	
-	private static final HashMap<String, String> defaults = new HashMap<String, String>();
+	private static final HashMap<String, String[]> defaults = new HashMap<String, String[]>();
 	static{
-		defaults.put("TimeZone", "GMT");
-		defaults.put("channelWidth", "600");
-		defaults.put("screenWidth", "900");
-		defaults.put("screenHeight", "600");
-		defaults.put("endTime", "30");
-		defaults.put("numCells", "5");
-		defaults.put("cellDetailLevel", "1");
+		defaults.put("TimeZone", new String[]{"GMT"});
+		defaults.put("screenWidth", new String[]{"900"});
+		defaults.put("screenHeight", new String[]{"600"});
+		defaults.put("endTime", new String[]{"30"});
+		defaults.put("numCells", new String[]{"5"});
+		defaults.put("cellDetailLevel", new String[]{"1"});
+		defaults.put("displayImages", new String[]{"true"});
+		defaults.put("vessel", new String[]{"300", "90", "100"});
+		defaults.put("distFromSource", new String[]{"0"});
+		defaults.put("generateImages", new String[]{"false"});
+		defaults.put("secBetweenOutput", new String[]{".5"});
+		defaults.put("secBetweenImages", new String[]{"1"});
+		defaults.put("speedUp", new String[]{"1"});
 	}
 	
 	private static final HashMap<String, String> cellDefaults = new HashMap<String, String>();
@@ -50,10 +60,10 @@ public class Defaults {
 		proteinDefaults.put("Name", "No Name");
 	}
 	
-	private HashMap<String, String> currentVals;
+	private HashMap<String, String[]> currentVals;
 	
 	public Defaults(){
-		currentVals = new HashMap<String, String>();
+		currentVals = new HashMap<String, String[]>();
 	}
 	
 	public static boolean variableExists(String key){
@@ -61,22 +71,27 @@ public class Defaults {
 	}
 	
 	public void printDefaultValues(PrintStream ps){
-		for (Entry<String, String> entry : defaults.entrySet()){
+		for (Entry<String, String[]> entry : defaults.entrySet()){
 			String key = entry.getKey();
 			if (currentVals.containsKey(key)){
-				ps.println(key + ": " + currentVals.get(key));
+				String vals = String.join("\t", Arrays.asList(currentVals.get(key)));
+				ps.println(key + ": " + vals);
 			}
 			else{
-				ps.println(key + ": " + entry.getValue());
+				String vals = String.join("\t", Arrays.asList(entry.getValue()));
+				ps.println(key + ": " + vals);
 			}
 		}
 	}
 	
-	public boolean addCurrent(String k, String v){
+	public boolean addCurrent(String k, String[] v){
 		k = k.trim();
-		v = v.trim();
+		for (int i = 0; i < v.length; i++){
+			v[i] = v[i].trim();
+		}
 		if (!defaults.containsKey(k)){
-			System.err.println("Variable " + k + " not found. (" + k + ", " + v + " not added.");
+			String vals = String.join("\t", Arrays.asList(v));
+			System.err.println("Variable " + k + " not found. (" + k + ", " + vals + " not added.");
 			return false;
 		}
 		currentVals.put(k, v);
@@ -87,27 +102,33 @@ public class Defaults {
 		if (!defaults.containsKey(key)){
 			throw new SimException("Variable " + key + " not found in default list.");
 		}
-		String val = defaults.get(key);
+		String[] val = defaults.get(key);
 		if (currentVals.containsKey(key)){
 			val = currentVals.get(key);
 		}
-		return Boolean.parseBoolean(val);
+		if (val.length < 1){
+			throw new SimException("Variable " + key + " does not have valid value");
+		}
+		return Boolean.parseBoolean(val[0]);
 	}
 	
 	public int getValue(int i, String key) throws SimException{
 		if (!defaults.containsKey(key)){
 			throw new SimException("Variable " + key + " not found in default list.");
 		}
-		String val = defaults.get(key);
+		String[] val = defaults.get(key);
 		if (currentVals.containsKey(key)){
 			val = currentVals.get(key);
 		}
+		if (val.length < 1){
+			throw new SimException("Variable " + key + " does not have valid value");
+		}
 		int result = 0;
 		try{
-			result = Integer.parseInt(val);
+			result = Integer.parseInt(val[0]);
 		}
 		catch (NumberFormatException e){
-			throw new SimException("Number Format Exception for integer variable " + key + ". Unknwon value: " + val);
+			throw new SimException("Number Format Exception for integer variable " + key + ". Unknwon value: " + val[0]);
 		}
 		return result;
 	}
@@ -116,16 +137,40 @@ public class Defaults {
 		if (!defaults.containsKey(key)){
 			throw new SimException("Variable " + key + " not found in default list.");
 		}
-		String val = defaults.get(key);
+		String[] val = defaults.get(key);
 		if (currentVals.containsKey(key)){
 			val = currentVals.get(key);
 		}
 		float result = 0.0f;
+		if (val.length < 1){
+			throw new SimException("Variable " + key + " does not have valid value");
+		}
 		try{
-			result = Float.parseFloat(val);
+			result = Float.parseFloat(val[0]);
 		}
 		catch (NumberFormatException e){
-			throw new SimException("Number Format Exception for float variable " + key + ". Unknwon value: " + val);
+			throw new SimException("Number Format Exception for float variable " + key + ". Unknwon value: " + val[0]);
+		}
+		return result;
+	}
+	
+	public long getValue(long lg, String key) throws SimException{
+		if (!defaults.containsKey(key)){
+			throw new SimException("Variable " + key + " not found in default list.");
+		}
+		String[] val = defaults.get(key);
+		if (currentVals.containsKey(key)){
+			val = currentVals.get(key);
+		}
+		long result = 0L;
+		if (val.length < 1){
+			throw new SimException("Variable " + key + " does not have valid value");
+		}
+		try{
+			result = Long.parseLong(val[0]);
+		}
+		catch (NumberFormatException e){
+			throw new SimException("Number Format Exception for long variable " + key + ". Unknwon value: " + val[0]);
 		}
 		return result;
 	}
@@ -134,11 +179,42 @@ public class Defaults {
 		if (!defaults.containsKey(key)){
 			throw new SimException("Variable " + key + " not found in default list.");
 		}
-		String val = defaults.get(key);
+		String val[] = defaults.get(key);
 		if (currentVals.containsKey(key)){
 			val = currentVals.get(key);
 		}
-		return val;
+		if (val.length < 1){
+			throw new SimException("Variable " + key + " does not have valid value");
+		}
+		return val[0];
+	}
+	
+	public Vector3f get3DVector(Vector3f v, String key) throws SimException{
+		if (!defaults.containsKey(key)){
+			throw new SimException("Variable " + key + " not found in default list.");
+		}
+		String[] val = defaults.get(key);
+		if (currentVals.containsKey(key)){
+			val = currentVals.get(key);
+		}
+		if (val.length < 3){
+			throw new SimException("Variable " + key + " is not a valid Vector3f");
+		}
+		float[] f = new float[3];
+		try{
+			for (int i = 0; i < 3; i++){
+				f[i] = Float.parseFloat(val[i]);
+			}
+		}
+		catch (NumberFormatException e){
+			String value = "";
+			for (int j = 0; j < val.length; j++){
+				value = value + val[j] + " ";
+			}
+			throw new SimException("Number Format Exception for float variable " + key + ". Unknwon value: " + value);
+			
+		}
+		return new Vector3f(f);
 	}
 
 }

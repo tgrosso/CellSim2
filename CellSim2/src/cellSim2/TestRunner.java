@@ -43,14 +43,14 @@ import java.io.IOException;
 public class TestRunner {
 	private static File outputDir = null;
 	private static int numRuns = 1;
-	private static LinkedHashMap<String, String> defaultMap;
+	private static LinkedHashMap<String, String[]> defaultMap;
 	private static LinkedHashMap<String, String[]> paramMap;
 	private static LinkedHashMap<String, Integer> dirNames;
-	private static ArrayList<SimGenerator> generators;
+	private static ArrayList<GeneratorThread> generators;
 	static{
 		dirNames = new LinkedHashMap<String, Integer>();
-		generators = new ArrayList<SimGenerator>();
-		defaultMap = new LinkedHashMap<String, String>();
+		generators = new ArrayList<GeneratorThread>();
+		defaultMap = new LinkedHashMap<String, String[]>();
 		paramMap = new LinkedHashMap<String, String[]>();
 	}
 
@@ -97,13 +97,13 @@ public class TestRunner {
 			while ((line = br.readLine()) != null) {
 				if (line.length() > 0 && !line.contains("\\\\")){
 					String[] valueVar = line.split("\t");
-					if (valueVar.length != 2){
+					if (valueVar.length < 2){
 						System.err.println("Badly formatted input. Variable<tab>value.");
 						System.err.println("Input was: " + line);
 						continue;
 					}
-					String value = valueVar[1];
 					String var = valueVar[0];
+					String[] value = Arrays.copyOfRange(valueVar, 1, valueVar.length);
 					if (value == null || var == null){
 						System.err.println("Badly formatted input. Variable <tab>value.");
 						System.err.println("Input was: " + line);
@@ -266,6 +266,7 @@ public class TestRunner {
 					PrintWriter pw = new PrintWriter(infile);
 					
 					//First the current parameters
+					//TODO: Get non-singular parameters! For now, params don't have them!
 					for (int i = 0; i < params.length; i++){
 						String[] vals = (String[])paramMap.get(params[i]);
 						String val = vals[valueIds[i]];
@@ -273,11 +274,12 @@ public class TestRunner {
 					}
 					
 					//Then the rest of the defaults
-					for(Entry<String, String> e : defaultMap.entrySet()) {
+					for(Entry<String, String[]> e : defaultMap.entrySet()) {
 				        String var = e.getKey();
-				        String val = e.getValue();
+				        String[] val = e.getValue();
 				        if (!paramMap.containsKey(var)){
-				        	pw.println(var + "\t" + val);
+				        	String vals = String.join("\t", Arrays.asList(val));
+				        	pw.println(var + "\t" + vals);
 				        }
 				    }
 					pw.close();
@@ -298,7 +300,7 @@ public class TestRunner {
 			}
 			
 			//Now make a new SimGenerator for this process
-			generators.add(new SimGenerator(infile, runDir));
+			generators.add(new GeneratorThread(infile.toString(), runDir.toString()));
 			
 			return;
 		}
@@ -318,6 +320,38 @@ public class TestRunner {
 			runTests(paramMap, params, newIds, myId+1, runNum);
 		}
 	}
+}
 	
-	
+class GeneratorThread implements Runnable{
+	private String infile, outfile;
+	private ArrayList<String> command;
+		
+	public GeneratorThread(String i, String o){
+		infile = i;
+		outfile = o;
+		command = new ArrayList<String>();
+		command.add("java");
+		command.add("-cp");
+		command.add(".:/Users/terri/Documents/javaLibraries/lwjgl-2.9.3/jar/lwjgl.jar:/Users/terri/Documents/javaLibraries/lwjgl-2.9.3/jar/lwjgl_util.jar:/Users/terri/Documents/javaLibraries/jbullet-20101010/dist/jbullet.jar:/Users/terri/Documents/javaLibraries/jbullet-20101010/dist/jbullet-demos.jar:/Users/terri/git/CellSim2/bin/:");
+		command.add("-Djava.library.path=/Users/terri/Documents/javaLibraries/lwjgl-2.9.3/native/macosx/");			
+		command.add("cellSim2.SimGenerator");
+		command.add(infile);
+		command.add(outfile);
+	}
+		
+	public void run(){
+		ProcessBuilder pb = new ProcessBuilder(command);
+		pb.inheritIO();
+		try{
+			Process p = pb.start();
+			int outcome = p.waitFor();
+			System.out.println("Process complete. Outcome: " + outcome);
+		}
+		catch(IOException e){
+			System.err.println(e.toString());
+		}
+		catch(InterruptedException f){
+			System.err.println(f.toString());
+		}
+	}
 }

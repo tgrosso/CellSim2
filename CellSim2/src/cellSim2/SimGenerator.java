@@ -20,10 +20,8 @@
 package cellSim2;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.BufferedReader;
-import java.io.PrintWriter;
-import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 
 import com.bulletphysics.demos.opengl.LWJGL;
 import com.bulletphysics.demos.opengl.GLDebugDrawer;
@@ -31,26 +29,102 @@ import com.bulletphysics.demos.opengl.GLDebugDrawer;
 import org.lwjgl.LWJGLException;
 
 
-public class SimGenerator implements Runnable{
+public class SimGenerator {
 	private File inputFile;
 	private File outputDir;
-	private String[] args = {""};
+	private Defaults simValues;
+	
+	public int screenWidth;
+	public int screenHeight;
+	public float distFromSource;
+	public long endTime;
+	public boolean generateImages;
+	public float secBetweenOutput;
+	public int secBetweenImages;
+	public boolean displayImages;
+	
+	
 	
 	public SimGenerator(File in, File out){
 		inputFile = in;
 		outputDir = out;
+		simValues = new Defaults();
+		//Get defaults for all public variables
+		Field[] allFields = SimGenerator.class.getDeclaredFields();
+	    for (Field f : allFields) {
+	        if (Modifier.isPublic(f.getModifiers())) {
+	            String type = f.getType().getName();
+	            System.out.println(f.getName() + ": " + type);
+	        	try{
+	        		switch(type){
+	        		case "int":
+	        			f.setInt(this, simValues.getValue(0, f.getName()));
+	        			System.out.println(f.getName() + f.getInt(this));
+	        			break;
+	        		case "float":
+	        			f.setFloat(this, simValues.getValue(0f, f.getName()));
+	        			System.out.println(f.getName() + f.getFloat(this));
+	        			break;
+	        		case "boolean":
+	        			f.setBoolean(this, simValues.getValue(true, f.getName()));
+	        			System.out.println(f.getName() + f.getBoolean(this));
+	        			break;
+	        		case "long":
+	        			f.setLong(this, simValues.getValue(0L, f.getName()));
+	        			System.out.println(f.getName() + f.getLong(this));
+	        			break;
+	        		default:
+	        			System.err.println("Programming Error! Variable " + f.getName() + " does not have a default value.");
+		        		System.err.println("Program cannot proceed.");
+		        		System.exit(1);
+	        		}
+	        		
+	        	}
+	        	catch(SimException e){
+	        		System.err.println("Programming Error! Variable " + f.getName() + " does not have a default value.");
+	        		System.err.println("Program cannot proceed.");
+	        		System.exit(1);
+	        	}
+	        	catch(IllegalAccessException g){
+	        		System.err.println("Illegal Access!");
+	        		System.err.println(g.toString());
+	        	}
+	        }
+	    }
+		
 	}
 	
-	public void run() {
+	public Defaults getValues(){
+		return simValues;
+	}
+	
+	public static void main(String[] args) {
 		System.out.println("Sim Generator Is Running");
-		System.out.println("Input File: " + inputFile.toString());
-		System.out.println("Output Directory: " + outputDir.toString());
+		SimGenerator sg = new SimGenerator(new File(args[0]), new File(args[1]));
+		Defaults def = sg.getValues();
+		boolean showScreen = true;
+		int screenwidth = 800;
+		int screenheight = 800;
+		if (!showScreen){
+			screenwidth = 10;
+			screenheight = 10;
+		}
+		try{
+			showScreen = def.getValue(showScreen, "displayImages");
+			screenwidth = def.getValue(screenwidth, "screenWidth");
+			screenheight = def.getValue(screenheight, "screenHeight");
+		}
+		catch(SimException e){
+			System.err.println(e.toString());
+		}
+		System.out.println("Input File: " + sg.inputFile.toString());
+		System.out.println("Output Directory: " + sg.outputDir.toString());
 		Simulation sim = new Simulation(LWJGL.getGL());
 		sim.initPhysics();
 		sim.getDynamicsWorld().setDebugDrawer(new GLDebugDrawer(LWJGL.getGL()));
 
 		try{
-			LWJGL.main(args, 800, 800, "Cell Simulation", sim);
+			LWJGL.main(args, screenwidth, screenheight, ("Cell Simulation:" + sg.inputFile.toString()), sim);
 		}
 		catch(LWJGLException e){
 			System.err.println("Could not run simulation.  Error: " + e.toString());

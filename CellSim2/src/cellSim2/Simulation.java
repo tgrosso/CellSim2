@@ -48,11 +48,57 @@ import static com.bulletphysics.demos.opengl.IGL.*;
 
 public class Simulation extends BasicDemo{
 
-	/**
-	 * 
-	 */
+	private boolean render = true;
+	
 	public Simulation(IGL gl) {
 		super(gl);
+	}
+	
+	//@Override
+	//public void initPhysics(){
+	//	
+	//}
+		
+	@Override
+	public void displayCallback() {
+		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		if (render){
+			renderme();
+		}
+
+		// optional but useful: debug drawing to detect problems
+		if (dynamicsWorld != null) {
+			dynamicsWorld.debugDrawWorld();
+		}
+
+		//glFlush();
+		//glutSwapBuffers();
+	}
+	
+	@Override
+	public void clientMoveAndDisplay() {
+		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		// simple dynamics world doesn't handle fixed-time-stepping
+		float ms = getDeltaTimeMicroseconds();
+
+		// step the simulation
+		if (dynamicsWorld != null) {
+			dynamicsWorld.stepSimulation(ms / 1000000f);
+			// optional but useful: debug drawing
+			dynamicsWorld.debugDrawWorld();
+		}
+
+		if (render){
+			renderme();
+		}
+		//glFlush();
+		//glutSwapBuffers();
+	}
+	
+	public boolean renderDisplay(){
+		return render;
 	}
 
 }
