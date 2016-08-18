@@ -45,6 +45,8 @@ public class TestRunner {
 	private static int numRuns = 1;
 	private static LinkedHashMap<String, String[]> defaultMap;
 	private static LinkedHashMap<String, String[]> paramMap;
+	private static LinkedHashMap<String, String> proteinMap;
+	private static LinkedHashMap<String, String[]> gradientMap;
 	private static LinkedHashMap<String, Integer> dirNames;
 	private static ArrayList<GeneratorThread> generators;
 	static{
@@ -52,6 +54,8 @@ public class TestRunner {
 		generators = new ArrayList<GeneratorThread>();
 		defaultMap = new LinkedHashMap<String, String[]>();
 		paramMap = new LinkedHashMap<String, String[]>();
+		proteinMap = new LinkedHashMap<String, String>();
+		gradientMap = new LinkedHashMap<String, String[]>();
 	}
 
 	/**
@@ -109,8 +113,26 @@ public class TestRunner {
 						System.err.println("Input was: " + line);
 						continue;
 					}
+					if (var.equals("protein")){
+						if (value.length != 2){
+							System.err.println("Badly formatted protein input");
+							System.err.println("Input was " + line);
+							continue;
+						}
+						proteinMap.put(value[0], value[1]);
+						continue;
+					}
+					if (var.equals("gradient")){
+						if (value.length != 2){
+							System.err.println("Badly formatted gradient input");
+							System.err.println("Input was " + line);
+							continue;
+						}
+						gradientMap.put(value[0], Arrays.copyOfRange(value, 1, value.length));
+						continue;
+					}
 					if (!Defaults.variableExists(var)){
-						System.err.println("Varible " + var + " does not exist.");
+						System.err.println("TestRunner reading Defaults: Varible " + var + " does not exist.");
 						continue;
 					}
 					defaultMap.put(var, value);
@@ -162,8 +184,16 @@ public class TestRunner {
 						System.err.println("Input was: " + line);
 						continue;
 					}
+					if (paramVar[0] == "protein"){
+						continue;
+						//TODO Right now proteins can't be parameters!
+					}
+					if (paramVar[0] == "gradient"){
+						continue;
+						//TODO Right now gradients can't be parameters!
+					}
 					if (!Defaults.variableExists(paramVar[0])){
-						System.err.println("Varible " + paramVar[0] + " does not exist.");
+						System.err.println("TestRunner Reading Params: Varible " + paramVar[0] + " does not exist.");
 						continue;
 					}
 					String param = paramVar[0];
@@ -282,6 +312,21 @@ public class TestRunner {
 				        	pw.println(var + "\t" + vals);
 				        }
 				    }
+					//Now the proteins
+					for(Entry<String, String> e : proteinMap.entrySet()) {
+				        String var = e.getKey();
+				        String val = e.getValue();
+				        pw.println("protein\t" + var + "\t" + val);
+				   
+				    }
+					//Now the gradients
+					for(Entry<String, String[]> e : gradientMap.entrySet()) {
+				        String var = e.getKey();
+				        String[] val = e.getValue();
+				        String vals = String.join("\t", Arrays.asList(val));
+			        	pw.println("gradient\t" + var + "\t" + vals);
+				    }
+					
 					pw.close();
 				}
 				catch(IOException e){

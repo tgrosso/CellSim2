@@ -49,9 +49,12 @@ import static com.bulletphysics.demos.opengl.IGL.*;
 public class Simulation extends BasicDemo{
 
 	private boolean render = true;
+	private SimGenerator simValues;
+	private long currentTime;
 	
-	public Simulation(IGL gl) {
+	public Simulation(IGL gl, SimGenerator s) {
 		super(gl);
+		simValues = s;
 	}
 	
 	//@Override
@@ -100,5 +103,7 @@ public class Simulation extends BasicDemo{
 	public boolean renderDisplay(){
 		return render;
 	}
+	
+	
 
 }

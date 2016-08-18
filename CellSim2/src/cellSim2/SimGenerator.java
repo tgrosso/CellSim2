@@ -20,8 +20,12 @@
 package cellSim2;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map.Entry;
 
 import com.bulletphysics.demos.opengl.LWJGL;
 import com.bulletphysics.demos.opengl.GLDebugDrawer;
@@ -43,42 +47,53 @@ public class SimGenerator {
 	public int secBetweenImages;
 	public boolean displayImages;
 	
-	
+	public ArrayList<Protein> proteins;
 	
 	public SimGenerator(File in, File out){
 		inputFile = in;
 		outputDir = out;
 		simValues = new Defaults();
+		try{
+			simValues.readInputFile(in);
+		}
+		catch(IOException e){
+			System.err.println("Could not read all inputs!!");
+			System.err.println("Will use some default values");
+		}
 		//Get defaults for all public variables
+		fillVariables();
+		
+		//Instantiate all proteins
+		proteins = new ArrayList<Protein>();
+		getProteins();
+		
+	}
+	
+	private void fillVariables(){
 		Field[] allFields = SimGenerator.class.getDeclaredFields();
 	    for (Field f : allFields) {
 	        if (Modifier.isPublic(f.getModifiers())) {
 	            String type = f.getType().getName();
-	            System.out.println(f.getName() + ": " + type);
+	            //System.out.println(f.getName() + ": " + type);
 	        	try{
 	        		switch(type){
 	        		case "int":
 	        			f.setInt(this, simValues.getValue(0, f.getName()));
-	        			System.out.println(f.getName() + f.getInt(this));
+	        			//System.out.println(f.getName() + f.getInt(this));
 	        			break;
 	        		case "float":
 	        			f.setFloat(this, simValues.getValue(0f, f.getName()));
-	        			System.out.println(f.getName() + f.getFloat(this));
+	        			//System.out.println(f.getName() + f.getFloat(this));
 	        			break;
 	        		case "boolean":
 	        			f.setBoolean(this, simValues.getValue(true, f.getName()));
-	        			System.out.println(f.getName() + f.getBoolean(this));
+	        			//System.out.println(f.getName() + f.getBoolean(this));
 	        			break;
 	        		case "long":
 	        			f.setLong(this, simValues.getValue(0L, f.getName()));
-	        			System.out.println(f.getName() + f.getLong(this));
+	        			//System.out.println(f.getName() + f.getLong(this));
 	        			break;
-	        		default:
-	        			System.err.println("Programming Error! Variable " + f.getName() + " does not have a default value.");
-		        		System.err.println("Program cannot proceed.");
-		        		System.exit(1);
 	        		}
-	        		
 	        	}
 	        	catch(SimException e){
 	        		System.err.println("Programming Error! Variable " + f.getName() + " does not have a default value.");
@@ -91,7 +106,18 @@ public class SimGenerator {
 	        	}
 	        }
 	    }
-		
+	}
+	
+	private void getProteins(){
+		System.out.println("Getting Proteins");
+		int index = 0;
+		HashMap<String, String> pro = simValues.getProteins();
+		for (Entry<String, String> entry : pro.entrySet()){
+			String key = entry.getKey();
+			proteins.add(new Protein(key, entry.getValue(), index));
+			index++;
+			System.out.println("Protein: " + key);
+		}
 	}
 	
 	public Defaults getValues(){
@@ -101,7 +127,6 @@ public class SimGenerator {
 	public static void main(String[] args) {
 		System.out.println("Sim Generator Is Running");
 		SimGenerator sg = new SimGenerator(new File(args[0]), new File(args[1]));
-		Defaults def = sg.getValues();
 		boolean showScreen = true;
 		int screenwidth = 800;
 		int screenheight = 800;
@@ -109,17 +134,7 @@ public class SimGenerator {
 			screenwidth = 10;
 			screenheight = 10;
 		}
-		try{
-			showScreen = def.getValue(showScreen, "displayImages");
-			screenwidth = def.getValue(screenwidth, "screenWidth");
-			screenheight = def.getValue(screenheight, "screenHeight");
-		}
-		catch(SimException e){
-			System.err.println(e.toString());
-		}
-		System.out.println("Input File: " + sg.inputFile.toString());
-		System.out.println("Output Directory: " + sg.outputDir.toString());
-		Simulation sim = new Simulation(LWJGL.getGL());
+		Simulation sim = new Simulation(LWJGL.getGL(), sg);
 		sim.initPhysics();
 		sim.getDynamicsWorld().setDebugDrawer(new GLDebugDrawer(LWJGL.getGL()));
 
