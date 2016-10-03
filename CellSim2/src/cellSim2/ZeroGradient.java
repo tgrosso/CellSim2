@@ -19,30 +19,29 @@
 
 package cellSim2;
 
+import java.io.PrintStream;
+
 import javax.vecmath.Vector3f;
 
 public class ZeroGradient implements Gradient{
 
 	protected float concentration;
 	protected int proteinId;
-	protected Simulation sim;
 	protected float[] baseColor = {0.0f, 1.0f, 0.0f, 1.0f};
 	protected int axis;
-	
 	
 	/**
 	 * Represents a solution of ligand with a constant concentration throughout
 	 */
 	//If no concentration given, default value is 0
-	public ZeroGradient(Simulation s, int protein, float con) {
+	public ZeroGradient(int protein, float con) {
 		concentration = con;
 		proteinId = protein;
-		sim = s;
 		axis = Gradient.X_AXIS;
 	}
 	
-	public ZeroGradient(Simulation s, int protein) {
-		this(s, protein, 0.0f);
+	public ZeroGradient(int protein) {
+		this(protein, 0.0f);
 	}
 
 	@Override
@@ -85,5 +84,22 @@ public class ZeroGradient implements Gradient{
 	@Override
 	public void setAxis(int a){
 		axis = a;
+	}
+	
+	@Override
+	public void setMaxConcentration(float c){
+		concentration = c;
+	}
+	
+	@Override
+	public void setMinConcentration(float c){
+		concentration = c;
+	}
+	
+	@Override
+	public void print(PrintStream p){
+		p.println("ZeroGradient");
+		p.println("\tProtein ID: "+ getProtein());
+		p.println("\tConcentration: " + concentration);
 	}
 }

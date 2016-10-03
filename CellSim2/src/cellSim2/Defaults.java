@@ -113,6 +113,7 @@ public class Defaults {
 						continue;
 					}
 					String pro = value[0];
+					//System.out.println(pro);
 					if (!proteins.containsKey(pro)){
 						System.err.println("Protein " + pro + " for gradient not in protein list.");
 						continue;
@@ -184,6 +185,10 @@ public class Defaults {
 	
 	public HashMap<String, String> getProteins(){
 		return proteins;
+	}
+	
+	public HashMap<String, String[]> getGradients(){
+		return gradients;
 	}
 	
 	public boolean getValue(boolean b, String key) throws SimException{
@@ -277,7 +282,7 @@ public class Defaults {
 		return val[0];
 	}
 	
-	public Vector3f get3DVector(Vector3f v, String key) throws SimException{
+	public Vector3f getValue(Vector3f v, String key) throws SimException{
 		if (!defaults.containsKey(key)){
 			throw new SimException("Variable " + key + " not found in default list.");
 		}

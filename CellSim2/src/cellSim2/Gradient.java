@@ -18,17 +18,23 @@
  */
 package cellSim2;
 
+import java.io.PrintStream;
 import javax.vecmath.Vector3f;
 
 public interface Gradient {
 	//TODO Do Gradients need ids? I have to think about that.
+	//For now, no
 	public static final int X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2;
 	public float getConcentration(long time, Vector3f position);
 	public int getProtein();
-	public float getMaxConcentration();
-	public float getMinConcentration();
-	public void setBaseColor(float r, float g, float b);
 	public float[] getColor(float con);
 	public int getAxis();
+	public float getMaxConcentration();
+	public float getMinConcentration();
 	public void setAxis(int a);
+	public void setBaseColor(float r, float g, float b);
+	public void setMaxConcentration(float c);
+	public void setMinConcentration(float c);
+	public void print(PrintStream p);
+	
 }

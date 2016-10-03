@@ -24,10 +24,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PrintStream;
 import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
-import java.util.Arrays;
-import java.util.HashMap;
+//import java.lang.reflect.Modifier;
+//import java.util.Arrays;
+//import java.util.HashMap;
 
 public class Protein {
 	private String name;
@@ -95,7 +96,7 @@ public class Protein {
 					switch(type){
 					case "boolean":
 	        			f.setBoolean(this, Boolean.parseBoolean(value));
-	        			System.out.println(f.getName() + f.getBoolean(this));
+	        			//System.out.println(f.getName() + " " + f.getBoolean(this));
 	        			break;
 					}
 				}catch(NoSuchFieldException e){
@@ -127,7 +128,15 @@ public class Protein {
 		return diffusible;
 	}
 	
-	public int getID(){
+	public int getId(){
 		return myId;
+	}
+	
+	public void print(PrintStream p){
+		p.println("Protein: " + getName());
+		p.println("\tID: " + getId());
+		p.println("\tBinds to surfaces: " + canBindToSurface());
+		p.println("\tBinds to membranes: " + canBindToMembrane());
+		p.println("\tDiffusible: " + canDiffuse());
 	}
 }
