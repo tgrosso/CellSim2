@@ -121,7 +121,7 @@ public class SimGenerator {
 	}
 	
 	private void createProteins(){
-		System.out.println("Creating Proteins");
+		System.out.println("Sim Generator: Creating Proteins");
 		int index = 0;
 		HashMap<String, String> pro = simValues.getProteins();
 		for (Entry<String, String> entry : pro.entrySet()){
@@ -133,27 +133,27 @@ public class SimGenerator {
 	}
 	
 	private void createGradients(){
-		System.out.println("Creating Gradients");
-		HashMap<String, String[]> grad = simValues.getGradients();
-		for (Entry<String, String[]> entry : grad.entrySet()){
+		System.out.println("Sim Generator: Creating Gradients");
+		HashMap<String, ArrayList<String[]>> grad = simValues.getGradients();
+		for (Entry<String, ArrayList<String[]>> entry : grad.entrySet()){
 			String key = entry.getKey();
 			//Does this protein exist?
 			int proId = -1;
 			for (int i = 0 ;i <  proteins.size(); i++){
 				if (proteins.get(i).getName().equals(key)){
 					//protein does exist. Is it diffusible?
+					proId = proteins.get(i).getId();
 					if (!proteins.get(i).canDiffuse()){
 						System.err.println("Protein " + key + " is not diffusible. Cannot be used for a gradient");
 						break;
 					}
-					proId = proteins.get(i).getId();
 				}
 			}
 			if (proId < 0){
 				System.err.println("Protein " + key + " not in protein list. Gradient not made.");
 				continue;
 			}
-			
+			System.out.println("Gradient of " +  key);
 			//Does this gradient exist already?
 			Gradient g = null;
 			for (int i = 0; i < gradients.size(); i++){
@@ -161,72 +161,91 @@ public class SimGenerator {
 					g = gradients.get(i);
 				}
 			}
-			//No the gradient doesn't exist - Make it
-			if (g == null){
-				//If there is only one value and it is a file, make a FileGradient and continue
-				File f = new File(entry.getValue()[0]);
-				if (f.exists()){
-					g = new FileGradient(proId, entry.getValue()[0]);
-					continue;
-				}
-				//If it's not a file name, make a Zero Gradient
-				else{
-					g = new ZeroGradient(proId);
-				}
-			}
-			//Yes the gradient did exist or we just made one
-			String param = entry.getValue()[0];
-			switch (param){
-				case "Color":
-				case "color":
-					if (entry.getValue().length < 4){
-						System.err.println("Color must have three float entries. Value only has " + (entry.getValue().length -1));
-						break;
+			//Go through each of the value strings
+			ArrayList<String[]> paramStrings = entry.getValue();
+			for (int i = 0; i < paramStrings.size(); i++){
+				String[] line = paramStrings.get(i);
+				String param = line[0];
+				if (g == null){
+					//gradient doesn't exist yet
+					//only valid parameters are "zero" or "file"
+					if (param.compareToIgnoreCase("file")==0){
+						g = new FileGradient(proId, line[1]);
+						FileGradient test = (FileGradient)g;
+						if (!test.successfullyMade()){
+							System.err.println("FileGradient " + key + " not successful.");
+							System.err.println("Making zero gradient");
+							g = new ZeroGradient(proId);
+						}
+						continue;
 					}
-					String[] colText = Arrays.copyOfRange(entry.getValue(), 1, 3);
-					float[] col = new float[3];
-					for (int i = 0; i < 3; i++){
-						try{
-							col[i] = Float.parseFloat(colText[i]);
-							System.out.println(col[i]);
-						}catch(NumberFormatException e){
-							System.err.println("Color values must be floats. " + colText[i] + " is not valid.");
+					else if (param.compareToIgnoreCase("zero")==0){
+						g = new ZeroGradient(proId, Float.parseFloat(line[1]));
+						continue;
+					}
+					else{
+						System.err.println("Must create gradient before setting parameters");
+						System.err.println("Parameter " + param + " not set on gradient " + key);
+						continue;
+					}
+				}
+				//g is not null
+				switch(param){
+					case "Color":
+					case "color":
+						if (line.length < 4){
+							System.err.println("Color must have three float entries. Value only has " + (line.length -1));
 							break;
 						}
-					}
-					g.setBaseColor(col[0], col[1], col[2]);
-					break;
-				case "Concentration":
-				case "concentration":
-					float c = -1f;
-					try{
-						c = Float.parseFloat(entry.getValue()[1]);
-					} catch (NumberFormatException e){
-						System.err.println("Concentration value " + param + " not a valid float. Not using.");
+						String[] colText = Arrays.copyOfRange(line, 1, 4);
+						//System.out.println("colText length: " + colText.length);
+						float[] col = new float[3];
+						for (int j = 0; j < 3; j++){
+							try{
+								col[j] = Float.parseFloat(colText[j]);
+								//System.out.println(col[j]);
+							}catch(NumberFormatException e){
+								System.err.println("Color values must be floats. " + colText[i] + " is not valid.");
+								break;
+							}
+						}
+						//System.out.println("Num cols: " + col.length);
+						g.setBaseColor(col[0], col[1], col[2]);
+						break;	
+					case "Concentration":
+					case "concentration":
+						float c = -1f;
+						try{
+							c = Float.parseFloat(line[1]);
+						} catch (NumberFormatException e){
+							System.err.println("Concentration value " + param + " not a valid float. Not using.");
+							break;
+						}
+						if (c < 0){
+							System.err.println("Concentration value " + c + " not valid. Must be positive. Not using");
+							break;
+						}
+						g.setMaxConcentration(c);
+						//Works for both FileGradient (does nothing) or Zero Gradien
 						break;
-					}
-					if (c < 0){
-						System.err.println("Concentration value " + c + " not valid. Must be positive. Not using");
-						break;
-					}
-					g.setMaxConcentration(c);
-					break;
-				case "Axis":
-				case "axis":
-					int a = -1;
-					try{
-						a = Integer.parseInt(entry.getValue()[1]);
-					}catch(NumberFormatException e){
-						System.err.println("Axis value " + param + " not a valid integer. Not using");
-						break;
-					}
-					if (a < 0 || a > 2){
-						System.err.println("Axis value " + " not a valid integer. Must be between 0 and 2. Not using.");
-						break;
-					}
-					g.setAxis(a);
-				default:
-					System.err.println("Gradient parameter " + param + " is not valid");
+					case "Axis":
+					case "axis":
+						int a = -1;
+						try{
+							a = Integer.parseInt(line[1]);
+						}catch(NumberFormatException e){
+							System.err.println("Axis value " + param + " not a valid integer. Not using");
+							break;
+						}
+						if (a < 0 || a > 2){
+							System.err.println("Axis value " + " not a valid integer. Must be between 0 and 2. Not using.");
+							break;
+						}
+						g.setAxis(a);
+						
+					default:
+						System.err.println("Gradient parameter " + param + " is not valid");
+				}
 			}
 		}
 	}
@@ -292,7 +311,7 @@ public class SimGenerator {
 	}
 	
 	public static void main(String[] args) {
-		System.out.println("Sim Generator Is Running");
+		System.out.println("Sim Generator Is Running\n");
 		SimGenerator sg = new SimGenerator(new File(args[0]), new File(args[1]));
 		boolean showScreen = true;
 		int screenwidth = 800;

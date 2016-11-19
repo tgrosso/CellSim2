@@ -28,6 +28,7 @@ import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map.Entry;
+import java.util.ArrayList;
 import javax.vecmath.Vector3f;
 
 
@@ -68,12 +69,12 @@ public class Defaults {
 	
 	private HashMap<String, String[]> currentVals;
 	private HashMap<String, String> proteins;
-	private HashMap<String, String[]> gradients;
+	private HashMap<String, ArrayList<String[]>> gradients;
 	
 	public Defaults(){
 		currentVals = new HashMap<String, String[]>();
 		proteins = new HashMap<String, String>();
-		gradients = new HashMap<String, String[]>();
+		gradients = new HashMap<String, ArrayList<String[]>>();
 	}
 	
 	public void readInputFile(File input) throws IOException{
@@ -92,6 +93,7 @@ public class Defaults {
 				}
 				String var = valueVar[0];
 				String[] value = Arrays.copyOfRange(valueVar, 1, valueVar.length);
+				//System.out.println(var + ": " + value.toString());
 				if (value == null || var == null){
 					System.err.println("Badly formatted input. Variable <tab>value.");
 					System.err.println("Input was: " + line);
@@ -119,7 +121,21 @@ public class Defaults {
 						continue;
 					}
 					value = Arrays.copyOfRange(value, 1, value.length);
-					gradients.put(pro, value);
+					//System.out.println("Gradient value:");
+					//for (int x = 0; x < value.length; x++){
+					//	System.out.println("   "+value[x]);
+					//}
+					//see if the gradient for this protein already exists
+					//if not make it with the values
+					if (!gradients.containsKey(pro)){
+						ArrayList<String[]> vals = new ArrayList<String[]>();
+						vals.add(value);
+						gradients.put(pro, vals);
+					}
+					else{
+						gradients.get(pro).add(value);
+					}
+					
 					continue;
 				}
 				if (!Defaults.variableExists(var)){
@@ -129,9 +145,29 @@ public class Defaults {
 				addCurrent(var, value);
 			}
 		}
+		
+		//print out proteins and gradients hashmaps
+		System.out.println("This is what defaults has entered:");
+		for (String name: proteins.keySet()){
+
+            String key =name.toString();
+            String value = proteins.get(name).toString();  
+            System.out.println(key + " " + value);  
+         }
+	     for (String key: gradients.keySet()){
+            ArrayList<String[]> value = gradients.get(key);
+            System.out.println(key + ":");
+            for (int i = 0; i < value.size(); i++){
+            	for (int j = 0; j < value.get(i).length; j++){
+            		System.out.print(value.get(i)[j] + " ");
+            	}
+            	System.out.println("");
+            }
+         }
 		br.close();
 		isr.close();
 		fis.close();
+		System.out.println("Defaults has read in the file.\n");
 	}
 	
 	public static boolean variableExists(String key){
@@ -187,7 +223,7 @@ public class Defaults {
 		return proteins;
 	}
 	
-	public HashMap<String, String[]> getGradients(){
+	public HashMap<String, ArrayList<String[]>> getGradients(){
 		return gradients;
 	}
 	

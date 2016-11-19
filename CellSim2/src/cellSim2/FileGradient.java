@@ -77,7 +77,8 @@ public class FileGradient implements Gradient{
             br = new BufferedReader(new FileReader(source));
             
             line = br.readLine();
-            String[] lineText = line.split("\t");
+            //System.out.println(line);
+            String[] lineText = line.split(",");
             if (lineText.length < 2){
             	throw new SimException("Gradient File must have at least one distance included");
             }
@@ -93,7 +94,7 @@ public class FileGradient implements Gradient{
             //Also set up the first pair of concentration values
             int count = 0;
             while ((line = br.readLine()) != null) {
-                lineText = line.split("\t");
+                lineText = line.split(",");
                 for (int i = 0; i < lineText.length; i++){
                 		float value = Float.parseFloat(lineText[i]);
                 		if (value > maxConcentration){
@@ -173,7 +174,7 @@ public class FileGradient implements Gradient{
 		            br = new BufferedReader(new FileReader(source));
 		            
 		            while ((line = br.readLine()) != null) {
-		            	String[] lineText = line.split("\t");
+		            	String[] lineText = line.split(",");
 		            	float value = Float.parseFloat(lineText[0]);
 		            	long t = (long) (value * 1000000);
 		            	if (t > nextTime){
@@ -332,6 +333,10 @@ public class FileGradient implements Gradient{
 		p.println("FileGradient");
 		p.println("\tProtein ID: "+ getProtein());
 		p.println("\tSource File: " + source.toString());
+	}
+	
+	public boolean successfullyMade(){
+		return gradientSuccessful;
 	}
 
 }
