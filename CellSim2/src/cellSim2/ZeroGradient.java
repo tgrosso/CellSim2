@@ -32,6 +32,7 @@ public class ZeroGradient implements Gradient{
 	
 	/**
 	 * Represents a solution of ligand with a constant concentration throughout
+	 * Concentration is given in microMolar units
 	 */
 	//If no concentration given, default value is 0
 	public ZeroGradient(int protein, float con) {

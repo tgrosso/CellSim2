@@ -42,19 +42,21 @@ public class FileGradient implements Gradient{
 	private File source;
 	private BufferedReader br;
 	private boolean gradientSuccessful;
+	private boolean finalConcentrations;
 	
 	float[] baseColor;
 	float[] distances;
-	float[] previousConcentrations;
-	float[] nextConcentrations;
+	float[] prevConc;
+	float[] nextConc;
 	long previousTime; //These times should be in milliseconds, although they are read in as seconds
 	long nextTime;
 	
 	public FileGradient(int protein, String filename, float[] col) {
 		proteinId = protein;
 		gradientSuccessful = false;
+		finalConcentrations = false;
 		axis = 0;
-		maxConcentration = Float.MAX_VALUE;
+		maxConcentration = Float.MIN_VALUE;
 		minConcentration = Float.MAX_VALUE;
 		baseColor = new float[]{0.5f, 0.5f, 0.5f, 1f};
 		if (col.length >= 3){
@@ -74,18 +76,18 @@ public class FileGradient implements Gradient{
 			String line = "";
             br = new BufferedReader(new FileReader(source));
             
-            //First line is distances. First cell should be empty
             line = br.readLine();
             String[] lineText = line.split("\t");
             if (lineText.length < 2){
             	throw new SimException("Gradient File must have at least one distance included");
             }
             distances = new float[lineText.length-1];
+            //First line is distances. First cell should be empty
             for (int i = 1; i < lineText.length; i++){
             	distances[i-1] = Float.parseFloat(lineText[i]);
             }
-            previousConcentrations = new float[distances.length];
-            nextConcentrations = new float[distances.length];
+            prevConc = new float[distances.length];
+            nextConc = new float[distances.length];
             
             //Now read in all of the concentrations to get maximum and minimum values
             //Also set up the first pair of concentration values
@@ -105,7 +107,7 @@ public class FileGradient implements Gradient{
                 				previousTime = (long) (value * 1000000);
                 			}
                 			else{
-                				previousConcentrations[i-1] = value;
+                				prevConc[i-1] = value;
                 			}
                 		}
                 		else if (count == 1){
@@ -113,7 +115,7 @@ public class FileGradient implements Gradient{
                 				nextTime = (long)(value * 1000000);
                 			}
                 			else{
-                				nextConcentrations[i-1] = value;
+                				nextConc[i-1] = value;
                 			}
                 		}
                 }
@@ -165,24 +167,98 @@ public class FileGradient implements Gradient{
 		position.get(pos); //pos has the values copied from position
 		if (gradientSuccessful){
 			if (time  > nextTime ){
-				//pull in the next line of the file
-				//if this is the last line of the file, then...
-				//update prevTime and nextTime
-				//update prevConcentrations and nextConcentrations
+				//pull in the next line of the file - The first number should be the time > nextTime
+				try {
+					String line = "";
+		            br = new BufferedReader(new FileReader(source));
+		            
+		            while ((line = br.readLine()) != null) {
+		            	String[] lineText = line.split("\t");
+		            	float value = Float.parseFloat(lineText[0]);
+		            	long t = (long) (value * 1000000);
+		            	if (t > nextTime){
+		            		previousTime = nextTime;
+		            		nextTime = t;
+		            		for (int i = 1; i < prevConc.length; i++){
+		            			prevConc[i-1] = nextConc[i-1];
+		            			value = Float.parseFloat(lineText[i]);
+		            			nextConc[i-1] = value;
+		            		}
+		            		break;
+		            	}
+		            }
+				}
+				catch (FileNotFoundException e) {
+		            System.err.println("File for Gradient could not be found: " + source.getName());
+		            System.err.println("All concentrations for protein " + proteinId + " set to zero"); //UGH WHERE DO I STORE PROTEIN LIST?
+		            maxConcentration = 0f;
+		            minConcentration = 0f;
+		        }
+				catch (IOException e) {
+		        	System.err.println("Problem reading file for gradient: " + source.getName());
+		        	e.printStackTrace();
+		            System.err.println("All concentrations for protein " + proteinId + " set to zero"); //UGH WHERE DO I STORE PROTEIN LIST?
+		            maxConcentration = 0f;
+		            minConcentration = 0f;
+		        }
+				catch (NumberFormatException e){
+		        	System.err.println("Error reading number from file. Incorrectly formatted.");
+		        	maxConcentration = 0f;
+		        	minConcentration = 0f;
+		        }
+				finally {
+		            if (br != null) {
+		                try {
+		                    br.close();
+		                } catch (IOException e) {
+		                    e.printStackTrace();
+		                }
+		            }
+		        }
+				
+				//if this is the last line of the file, i.e. no line > nextTime then set finalConcentrations to true
+				if (time > nextTime){
+					finalConcentrations = true;
+				}
+			}
+			
+			//find the two distances that position is in between given the axis
+			int lastPos = 0;
+			int nextPos = 1;
+			while (pos[axis] >= distances[nextPos] && nextPos < distances.length){
+					lastPos = nextPos;
+					nextPos++;
 			}
 			//ratio from previousTime to nextTime
 			long timeDiff = time - previousTime;
-			float timeRatio = (float)timeDiff / (nextTime = previousTime);
-			//find the two distances that position is in between given the axis
-			float lastPos = 0;
-			float nextPos = 0;
-			int index = 1;
-			while (pos[axis] >= distances[index] && index < distances.length){
-					lastPos = distances[index];
-					nextPos = distances[index];
-					index++;
+			float timeRatio = timeDiff / (float)(nextTime - previousTime);
+			//ratio from previousDistance to position
+			float distDiff = pos[axis] - distances[lastPos];
+			float distRatio = distDiff / (float)(distances[nextPos] - distances[lastPos]);
+			if (pos[axis]>distances[nextPos]){
+				//The distance is beyond the end of the given concentrations
+				//return the concentrations at the maximum distances (nextPos) at this time
+				if (finalConcentrations){
+					//We are past the maximum time
+					return nextConc[nextPos];
+				}
+				else{
+					float concentration = prevConc[nextPos]+ timeRatio * (nextConc[nextPos] - prevConc[nextPos]);
+					return concentration;
+				}
 			}
-			return 1f;
+			if (finalConcentrations){
+				//Not past the final distance, but past the final time
+				float concentration = nextConc[lastPos] + distRatio * (nextConc[nextPos] - nextConc[lastPos]);
+				return concentration;
+			}
+			//find concentration at this distance at previous time
+			float lastConcentration = prevConc[lastPos]+ distRatio * (prevConc[nextPos]-prevConc[lastPos]);
+			//find concentration at this distance at next time
+			float nextConcentration = nextConc[lastPos]+ distRatio * (nextConc[nextPos]-nextConc[lastPos]);
+			//find concentration between the two times
+			float concentration = lastConcentration + timeRatio * (nextConcentration - lastConcentration);
+			return concentration;
 		}
 		return 0f;
 	}
@@ -195,10 +271,10 @@ public class FileGradient implements Gradient{
 	public float[] getColor(float con){
 		//Find the color that represents this concentration
 		//white is minConcentration, baseColor is maximum
-		if (!gradientSuccessful){
-			return (new float[]{1.0f, 1.0f, 1.0f});
-		}
 		float[] newColor = new float[]{1.0f, 1.0f, 1.0f, 1.0f};
+		if (!gradientSuccessful){
+			return newColor;
+		}
 		if (con >= maxConcentration){
 			return baseColor;
 		}
@@ -207,8 +283,8 @@ public class FileGradient implements Gradient{
 		}
 		float ratio = (con-minConcentration)/(maxConcentration - minConcentration);
 		for (int i = 0; i < 3; i++){
-			float diff = 1 - baseColor[i];
-			float newCol = 1 - (ratio * diff);
+			float diff = 1.0f - baseColor[i];
+			float newCol = 1.0f - (ratio * diff);
 			newColor[i] = newCol;
 		}
 		return newColor;
