@@ -42,6 +42,15 @@ import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.linearmath.Transform;
 import com.bulletphysics.linearmath.DebugDrawModes;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Random;
+
 import javax.vecmath.Vector3f;
 
 import static com.bulletphysics.demos.opengl.IGL.*;
@@ -54,19 +63,59 @@ public class Simulation extends DemoApplication{
 	private ConstraintSolver solver;
 	
 	private ObjectArrayList<SimObject> modelObjects;
+	private ObjectArrayList<Gradient> gradients;
 
 	private float baseCameraDistance = 150;
 	private boolean needGImpact = false;
 
-	
-	private boolean render = true;
+	private ImageGenerator imageGen;
+	private boolean render = true, finished = false;
 	private SimGenerator simValues;
-	private long currentTime;
+	private long currentTime, startTime, clockTime, lastDataOutput;
+	
+	private Random random;
+	
+	private BufferedWriter logFile, cellData, wallData;
+	private ObjectArrayList<BufferedWriter> gradientDataFiles;
 	
 	public Simulation(IGL gl, SimGenerator s) {
 		super(gl);
 		simValues = s;
 		modelObjects = new ObjectArrayList<SimObject>();
+		//startTime is the underlying clock time. clockTime - startTime = currentTime
+		startTime = clock.getTimeMicroseconds();
+		clockTime = startTime;
+		//current time is microseconds since start of simulation
+		currentTime = clockTime - startTime;
+		lastDataOutput = -1;
+		
+		//TODO ImageGenerator is just a stub right now
+		imageGen = new ImageGenerator();
+		
+		random = new Random();
+		gradientDataFiles = new ObjectArrayList<BufferedWriter>();
+		
+		//Set up the output files
+		try{
+			logFile = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "logFile.csv")));
+			cellData = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "cellData.csv")));
+			cellData.write(Cell.getDataHeaders());
+			wallData = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "wallData.csv")));
+			wallData.write(Wall.getDataHeaders());
+			for (int i = 0; i < simValues.gradients.size(); i++){
+				String proteinName = getProteinName(simValues.gradients.get(i).getProtein());
+				BufferedWriter gradData = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "gradient"+proteinName+"_"+i+".csv")));
+				gradientDataFiles.add(gradData);
+				gradData.write(simValues.gradients.get(i).getDataHeaders());
+				
+			}
+		}
+		catch (IOException e){
+			System.err.println("Cannot generate output files!");
+		}
+		writeToLog(getFormattedTime() + "\tIntialization Complete");
+		writeToLog("currentTime = " + currentTime);
+		writeToLog("formattedTime = " + getFormattedTime());
 	}
 	
 	@Override
@@ -112,29 +161,38 @@ public class Simulation extends DemoApplication{
 	
 	@Override
 	public void clientMoveAndDisplay() {
+		long secSinceOutput = (currentTime - lastDataOutput)/(1000*1000);
+		if (lastDataOutput < 0 || secSinceOutput >= simValues.secBetweenOutput){
+			outputData();
+			lastDataOutput = currentTime;
+		}
 		int numObjects = modelObjects.size();
 		for (int i = 0; i < numObjects; i++){
 			SimObject bioObj = modelObjects.getQuick(i);
 			bioObj.updateObject();
-			//writeToLog("Object updated: " + bioObj.getType() + " " + clock.getTimeMicroseconds());
 		}
 
 		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		// simple dynamics world doesn't handle fixed-time-stepping
-		float ms = getDeltaTimeMicroseconds();
+		long oldTime = clockTime;
+		clockTime = clock.getTimeMicroseconds();
+		long deltaTime = clockTime - oldTime;
+		currentTime = clockTime - startTime;
 
 		// step the simulation
 		if (dynamicsWorld != null) {
-			dynamicsWorld.stepSimulation(ms / 1000000f);
+			dynamicsWorld.stepSimulation(deltaTime / 1000000f);
 			// optional but useful: debug drawing
 			dynamicsWorld.debugDrawWorld();
 		}
 
+		if (simValues.displayImages){
+			renderme();
+			//glFlush();
+			//glutSwapBuffers();
+		}
 		
-		renderme();
-		//glFlush();
-		//glutSwapBuffers();
 	}
 	
 	@Override
@@ -163,7 +221,7 @@ public class Simulation extends DemoApplication{
 					}
 				}
 			}
-			
+			/*
 			Transform ta = new Transform(), tb = new Transform();
 			int numConstraints = dynamicsWorld.getNumConstraints();
 			for (int i = 0; i < numConstraints; i++){
@@ -178,21 +236,35 @@ public class Simulation extends DemoApplication{
 					gl.glVertex3f(tb.origin.x, tb.origin.y, tb.origin.z);
 					gl.glEnd();
 				}
-			}
+			}*/
 		}
 	}
 
 	
 	public void addSimulationObject(SimObject obj){
-		//This method adds a wall to the container
+		//This method adds an object to the simulation
 		modelObjects.add(obj);
 		dynamicsWorld.addRigidBody(obj.getRigidBody());
+		if (obj.getType().equals("Cell")){
+			obj.setOutputFile(cellData);
+		}
+		else if(obj.getType().equals("Wall")){
+			obj.setOutputFile(wallData);
+		}
 	}
 	
 	public void removeSimulationObject(SimObject obj){
 		//Ugh!  How do I do this?
 		dynamicsWorld.removeRigidBody(obj.getRigidBody());
 		modelObjects.remove(obj);
+	}
+	
+	private void outputData(){
+		int numObjects = modelObjects.size();
+		for (int i = 0; i < numObjects; i++){
+			SimObject bioObj = modelObjects.getQuick(i);
+			bioObj.writeOutput();
+		}
 	}
 	
 	public boolean renderDisplay(){
@@ -205,6 +277,90 @@ public class Simulation extends DemoApplication{
 	
 	public String getProteinName(int id){
 		return simValues.getProteinName(id);
+	}
+	
+	public long getCurrentTimeMicroseconds(){
+		return currentTime;
+	}
+	
+	public String getFormattedTime(){
+		long millisec = currentTime / 1000;
+		long mil = millisec % 1000;
+		long sec = (millisec / 1000) % 60;
+		long min = (millisec / (1000 * 60)) % 60;
+		long hour = (millisec / (1000 * 60 * 60));
+		String time = String.format("%02d:%02d:%02d:%d", hour, min, sec, mil);
+		return time;
+	}
+	
+	public float getNextRandomF(){
+		return random.nextFloat();
+	}
+	
+	public boolean readyToQuit(){
+		return finished;
+	}
+	
+	public ByteBuffer getImageBuffer(int w, int h){
+		return imageGen.getBuffer(simValues.screenWidth, simValues.screenHeight);
+	}
+	
+	public boolean timeToOutputImage(){
+		//TODO write this!
+		return false;
+	}
+	
+	public void outputImage(){
+		//TODO generate image file
+	}
+	
+	public void writeToLog(String s){
+		if (logFile != null){
+			try{
+				logFile.write(s);
+				logFile.newLine();
+				logFile.flush();
+			}
+			catch(IOException e){
+				System.err.println("Error writing to log file! ");
+				System.err.println(e.toString());
+			}
+		}
+	}
+	
+	
+	
+	public void wrapUp(){
+		writeToLog("current time (microseconds)" + currentTime);
+		writeToLog("\n" + getFormattedTime() + "\tFinishing Up");
+		
+		try{
+			logFile.flush();
+			logFile.close();
+			cellData.flush();
+			cellData.close();
+			wallData.flush();
+			wallData.close();
+			for (int i = 0; i < gradientDataFiles.size(); i++){
+				gradientDataFiles.get(i).flush();
+				gradientDataFiles.get(i).close();
+			}
+		}
+		catch(IOException e){
+			String s = "Unable to close output files";
+			
+			try{ 
+				logFile.write(s);
+				logFile.write(e.toString());
+				logFile.flush();
+				logFile.close();
+			}
+			
+			catch(IOException e1){
+				e1.printStackTrace();
+			}
+		//System.out.println(e.toString());
+		}
 	}
 
 }

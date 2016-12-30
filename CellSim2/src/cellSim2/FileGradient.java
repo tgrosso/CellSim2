@@ -338,5 +338,18 @@ public class FileGradient implements Gradient{
 	public boolean successfullyMade(){
 		return gradientSuccessful;
 	}
+	
+	@Override
+	public String getDataHeaders(){
+		String s = "File Gradient from : " + source.getName() + "\n";
+		s = s+ "Time Since Sim Start\tProtein";
+		if (gradientSuccessful){
+			for (int i = 0; i < distances.length; i++){
+				s = s + "\t" + distances[i];
+			}
+			s = s + "\n";
+		}
+		return s;
+	}
 
 }

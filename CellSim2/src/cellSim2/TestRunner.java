@@ -47,6 +47,7 @@ public class TestRunner {
 	private static LinkedHashMap<String, String[]> paramMap;
 	private static LinkedHashMap<String, String> proteinMap;
 	private static LinkedHashMap<String, String[][]> gradientMap;
+	private static LinkedHashMap<String, String[][]> wallMap;
 	private static LinkedHashMap<String, Integer> dirNames;
 	private static ArrayList<GeneratorThread> generators;
 	static{
@@ -56,6 +57,7 @@ public class TestRunner {
 		paramMap = new LinkedHashMap<String, String[]>();
 		proteinMap = new LinkedHashMap<String, String>();
 		gradientMap = new LinkedHashMap<String, String[][]>();
+		wallMap = new LinkedHashMap<String, String[][]>();
 	}
 
 	/**
@@ -107,6 +109,7 @@ public class TestRunner {
 						continue;
 					}
 					String var = valueVar[0];
+					//System.out.println("TestRunner var: " + var);
 					String[] value = Arrays.copyOfRange(valueVar, 1, valueVar.length);
 					if (value == null || var == null){
 						System.err.println("Badly formatted input. Variable <tab>value.");
@@ -143,6 +146,30 @@ public class TestRunner {
 							}
 							newArray[oldArray.length] = Arrays.copyOfRange(value, 1, value.length);
 							gradientMap.put(value[0], newArray);
+						}
+						continue;
+					}
+					if (var.equals("wall")){
+						if (value.length < 3){
+							System.err.println("Badly formatted wall input");
+							System.err.println("Input was " + line);
+							continue;
+						}
+						if (!wallMap.containsKey(value[0])){
+							//make a new array of string arrays
+							String[][] newArray = new String[1][];
+							newArray[0] = Arrays.copyOfRange(value, 1, value.length);
+							wallMap.put(value[0], newArray);
+						}
+						else{
+							//add a new String array to the end of the old one.
+							String[][] oldArray = wallMap.get(value[0]);
+							String[][] newArray = new String[oldArray.length+1][];
+							for(int i = 0; i < oldArray.length; i++){
+								newArray[i] = oldArray[i];
+							}
+							newArray[oldArray.length] = Arrays.copyOfRange(value, 1, value.length);
+							wallMap.put(value[0], newArray);
 						}
 						continue;
 					}
@@ -206,6 +233,10 @@ public class TestRunner {
 					if (paramVar[0] == "gradient"){
 						continue;
 						//TODO Right now gradients can't be testing values!
+					}
+					if (paramVar[0] == "wall"){
+						continue;
+						//TODO Right now wall changes can't be testing values!
 					}
 					if (!Defaults.variableExists(paramVar[0])){
 						System.err.println("TestRunner Reading Params: Varible " + paramVar[0] + " does not exist.");
@@ -341,6 +372,15 @@ public class TestRunner {
 						for (int i = 0; i < vals.length; i++){
 							String valString = String.join("\t", Arrays.asList(vals[i]));
 							pw.println("gradient\t" + var + "\t" + valString);
+						}
+				    }
+					//Now the walls
+					for(Entry<String, String[][]> e : wallMap.entrySet()) {
+						String var = e.getKey();
+						String[][] vals = e.getValue();
+						for (int i = 0; i < vals.length; i++){
+							String valString = String.join("\t", Arrays.asList(vals[i]));
+							pw.println("wall\t" + var + "\t" + valString);
 						}
 				    }
 					

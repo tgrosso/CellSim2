@@ -19,36 +19,21 @@ package cellSim2;
  * @author Terri Applewhite-Grosso
  *
  */
-import com.bulletphysics.collision.narrowphase.ManifoldPoint;
-import com.bulletphysics.collision.shapes.CollisionShape;
-import com.bulletphysics.demos.opengl.IGL;
-import com.bulletphysics.linearmath.Transform;
-import javax.vecmath.Vector3f;
-import java.io.BufferedWriter;
 
+import java.nio.ByteBuffer;
+import org.lwjgl.BufferUtils;
 
-public interface SimObject {
-		
-		public void collided(SimObject c, ManifoldPoint mp, long collID);
-		public CollisionShape getCollisionShape();
-		public SimRigidBody getRigidBody();
-		public void updateObject();
-		public Vector3f getColor3Vector();
-		public void setVisible(boolean v);
-		public boolean isVisible();
-		public int getID();
-		public float getMass();
-		public String getType();
-		public void destroy();
-		public void markForRemoval();
-		public boolean isMarked();
-		public boolean specialRender(IGL gl, Transform t);
-		public boolean isBound();
-		public void clearBound();
-		public void bind();
-		public String finalOutput();
-		public void wrapup();
-		public void setOutputFile(BufferedWriter bw);
-		public void writeOutput();
+public class ImageGenerator {
 
+	private ByteBuffer buf;
+	
+	public ImageGenerator() {
+		// TODO Auto-generated constructor stub
+		buf = BufferUtils.createByteBuffer(100 * 100 * 3);
+	}
+
+	public ByteBuffer getBuffer(int w, int h){
+		//TODO write this code!!
+		return buf;
+	}
 }

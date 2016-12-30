@@ -53,7 +53,8 @@ public class SimGenerator {
 	
 	public ArrayList<Protein> proteins;
 	public ArrayList<Gradient> gradients;
-	public ArrayList<Wall> walls;
+	
+	public ImageGenerator imageGen;
 	
 	public SimGenerator(File in, File out){
 		inputFile = in;
@@ -137,6 +138,7 @@ public class SimGenerator {
 		HashMap<String, ArrayList<String[]>> grad = simValues.getGradients();
 		for (Entry<String, ArrayList<String[]>> entry : grad.entrySet()){
 			String key = entry.getKey();
+			//System.out.println("SG gradient key : " + key);
 			//Does this protein exist?
 			int proId = -1;
 			for (int i = 0 ;i <  proteins.size(); i++){
@@ -159,6 +161,7 @@ public class SimGenerator {
 			for (int i = 0; i < gradients.size(); i++){
 				if (gradients.get(i).getProtein() == proId){
 					g = gradients.get(i);
+					System.out.println("found gradient for " + g.getProtein());
 				}
 			}
 			//Go through each of the value strings
@@ -166,10 +169,12 @@ public class SimGenerator {
 			for (int i = 0; i < paramStrings.size(); i++){
 				String[] line = paramStrings.get(i);
 				String param = line[0];
+				//System.out.println("SG170 param: " + param);
 				if (g == null){
 					//gradient doesn't exist yet
 					//only valid parameters are "zero" or "file"
-					if (param.compareToIgnoreCase("file")==0){
+					if (param.equalsIgnoreCase("file")){
+						//System.out.println("SG175 param: " + param);
 						g = new FileGradient(proId, line[1]);
 						FileGradient test = (FileGradient)g;
 						if (!test.successfullyMade()){
@@ -177,17 +182,17 @@ public class SimGenerator {
 							System.err.println("Making zero gradient");
 							g = new ZeroGradient(proId);
 						}
-						continue;
 					}
 					else if (param.compareToIgnoreCase("zero")==0){
 						g = new ZeroGradient(proId, Float.parseFloat(line[1]));
-						continue;
 					}
 					else{
 						System.err.println("Must create gradient before setting parameters");
 						System.err.println("Parameter " + param + " not set on gradient " + key);
 						continue;
 					}
+					gradients.add(g);
+					continue;
 				}
 				//g is not null
 				switch(param){
@@ -242,7 +247,6 @@ public class SimGenerator {
 							break;
 						}
 						g.setAxis(a);
-						
 					default:
 						System.err.println("Gradient parameter " + param + " is not valid");
 				}
@@ -251,55 +255,185 @@ public class SimGenerator {
 	}
 	
 	public void createWalls(Simulation sim){
-		float channelWidth = 300f, channelHeight = 90f, channelDepth = 100f;
+		ArrayList<Wall> walls = new ArrayList<Wall>();
+		Vector3f vesselSize = new Vector3f();
+		try{
+			vesselSize = simValues.getValue(vesselSize, "vessel");
+		}catch(SimException e){
+			System.err.println("Programming Error! Variable vessel does not have a default value.");
+    		System.err.println("Program cannot proceed.");
+    		System.exit(1);
+		}
+		System.out.println("Vessel size: " + vesselSize.toString());
+		float channelWidth = vesselSize.x, channelHeight = vesselSize.y, channelDepth = vesselSize.z;
 		float wallThick = 2f;
 		float[] wallColor = {.9f, .6f, .6f};
 		Wall nextWall;
 		Vector3f position = new Vector3f(0f, 0f, 0f);
 		
-		//Make the channel
+		//Make the vessel
 		//bottom
 		position.set(0f, -(float)((channelHeight+wallThick)/2.0), 0f);
 		nextWall = new Wall(sim, channelWidth, wallThick, channelDepth, position); 
 		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
 		nextWall.setVisible(true);
-		sim.addSimulationObject(nextWall);
+		walls.add(nextWall);
+		System.out.println("Bottom: " + nextWall.toString());
 		
 		//top
 		position.set(0f, (float)((channelHeight+wallThick)/2.0), 0f);
 		nextWall = new Wall(sim, channelWidth, wallThick, channelDepth, position); 
 		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
-		sim.addSimulationObject(nextWall);
+		nextWall.setVisible(true);
+		walls.add(nextWall);
+		System.out.println("Top: " +nextWall.toString());
 		
 		//back
 		position.set(0f, 0f, (float)((channelDepth+wallThick)/2.0));
 		nextWall = new Wall(sim, channelWidth, channelHeight, wallThick, position); 
 		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
 		nextWall.setVisible(false);
-		sim.addSimulationObject(nextWall);
-		
-		//left
-		position.set((float)((channelWidth+wallThick)/2.0), 0f, 0f);
-		nextWall = new Wall(sim, wallThick, channelHeight, channelDepth, position);
-		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
-		nextWall.setVisible(false);
-		sim.addSimulationObject(nextWall);
-		
-		//right
-		position.set((float)(-(channelWidth+wallThick)/2.0), 0f, 0f);
-		nextWall = new Wall(sim, wallThick, channelHeight, channelDepth, position);
-		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
-		nextWall.setVisible(false);
-		sim.addSimulationObject(nextWall);
+		walls.add(nextWall);
+		System.out.println("Back: " + nextWall.toString());
 		
 		//front
 		position.set(0f, 0f, -(float)((channelDepth+wallThick)/2.0));
 		nextWall = new Wall(sim, channelWidth, channelHeight, wallThick, position); 
+		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
 		nextWall.setVisible(false);
-		sim.addSimulationObject(nextWall);
+		walls.add(nextWall);
+		System.out.println("Front: "+nextWall.toString());
 		
-		sim.setBaseCameraDistance(110f);
+		/*
+		//left
+		position.set((float)((channelWidth+wallThick)/2.0), 0f, 0f);
+		nextWall = new Wall(sim, wallThick, channelHeight, channelDepth, position); 
+		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
+		nextWall.setVisible(true);
+		walls.add(nextWall);
+		System.out.println("Left: " + nextWall.toString());*/
 		
+		sim.setBaseCameraDistance((float)((channelWidth/2)*(1.05)*Math.tan(Math.PI/3)));
+		
+		//Now take in values from Defaults and update/edit the walls
+		HashMap<String, ArrayList<String[]>> wallData = simValues.getWalls();
+		for (Entry<String, ArrayList<String[]>> entry : wallData.entrySet()){
+			String key = entry.getKey();
+			if (key.equals("gradient")){
+				ArrayList<String[]> grads = wallData.get(key);
+				for (int i = 0; i < grads.size(); i++){
+					String[] thisGrad = grads.get(i);
+					if (thisGrad.length < 2){
+						System.err.println("Bad input for gradient wall. Not enough values");
+						System.err.println("Usage: wall gradient wallID protein");
+						System.err.println("Not using");
+						continue;
+					}
+					int thisWall = -1;
+					try{
+						thisWall = Integer.parseInt(thisGrad[0]);
+					}
+					catch(NumberFormatException e){
+						System.err.println("Format problem. Wall ID must be integer. Found: " + thisGrad[0]);
+						continue;
+					}
+					if (thisWall < 0 || thisWall >= walls.size()){
+						System.err.println("Wall id is not valid. " + thisGrad[0]);
+						continue;
+					}
+					//System.out.println("SG329 - Adding gradient to wall " + thisWall);
+					//Change the wall in the ArrayList to a gradient wall with this gradient
+					int pro = -1;
+					for (int j = 0; j < proteins.size(); j++){
+						Protein n = proteins.get(j);
+						if (n.getName().equals(thisGrad[1])){
+							pro = n.getId();
+						}
+					}
+					if (pro < 0){
+						System.err.println("Protein " + thisGrad[1] + " is not on the protein list.");
+						System.err.println("Not using");
+						continue;
+					}
+					System.out.println("Protein for gradient: " + pro);
+					System.out.println("Num gradients: " + gradients.size());
+					Gradient g = null;
+					for (int j = 0; j < gradients.size(); j++){
+						Gradient n = gradients.get(j);
+						if (n.getProtein() == pro){
+							g = n;
+						}
+					}
+					if (g == null){
+						System.err.println("No gradient found for : " + thisGrad[1]);
+						System.err.println("Not using");
+						continue;
+					}
+					//If we are here, we have the gradient and the wall id
+					Wall oldWall = walls.get(thisWall);
+					Vector3f oldSize = oldWall.getSize();
+					GradientWall newWall = new GradientWall(sim, oldSize.x, oldSize.y, oldSize.z, oldWall.getOrigin(), g);
+					newWall.setVisible(true);
+					newWall.setColor(0.6f, 0.6f, 1.0f);
+					newWall.setDistFromSource(distFromSource);
+					walls.set(thisWall, newWall);
+				}
+			}
+			if (key.equals("coat")){
+				ArrayList<String[]> coats = wallData.get(key);
+				for (int i = 0; i < coats.size(); i++){
+					String[] thisCoat = coats.get(i);
+					if (thisCoat.length < 3){
+						System.err.println("Bad input for coating wall. Not enough values");
+						System.err.println("Usage: wall caot wallID protein surfaceConcentration");
+						System.err.println("Not using");
+						continue;
+					}
+					int thisWall = -1;
+					try{
+						thisWall = Integer.parseInt(thisCoat[0]);
+					}
+					catch(NumberFormatException e){
+						System.err.println("Format problem. Wall ID must be integer. Found: " + thisCoat[0]);
+						continue;
+					}
+					if (thisWall < 0 || thisWall >= walls.size()){
+						System.err.println("Wall id is not valid. " + thisCoat[0]);
+						continue;
+					}
+					//Coat this wall with the appropriate protein
+					int pro = -1;
+					for (int j = 0; j < proteins.size(); j++){
+						Protein n = proteins.get(j);
+						if (n.getName().equals(thisCoat[1])){
+							if (!n.canBindToSurface()){
+								System.err.println("Protein " + thisCoat[1] + " does not bind to surfaces. Not coating wall.");
+								continue;
+							}
+							pro = n.getId();
+						}
+					}
+					if (pro < 0){
+						System.err.println("Protein " + thisCoat[1] + " is not on the protein list.");
+						System.err.println("Not using");
+						continue;
+					}
+					float conc = 0f;
+					try{
+						conc = Float.parseFloat(thisCoat[2]);
+					}
+					catch(NumberFormatException f){
+						System.err.println("Could not parse surface concentration: " + thisCoat[2]);
+						continue;
+					}
+					walls.get(thisWall).coatWithProtein(pro, conc);
+				}
+			}
+		}
+		
+		for (int i = 0; i < walls.size(); i++){
+			sim.addSimulationObject(walls.get(i));
+		}
 	}
 	
 	public Defaults getValues(){
@@ -308,6 +442,10 @@ public class SimGenerator {
 	
 	public String getProteinName(int id){
 		return proteins.get(id).getName();
+	}
+	
+	public File getOutputDir(){
+		return outputDir;
 	}
 	
 	public static void main(String[] args) {
@@ -320,12 +458,12 @@ public class SimGenerator {
 			screenwidth = 10;
 			screenheight = 10;
 		}
-		Simulation sim = new Simulation(LWJGL.getGL(), sg);
+		Simulation sim = new Simulation(SimLWJGL.getGL(), sg);
 		sim.initPhysics();
-		sim.getDynamicsWorld().setDebugDrawer(new GLDebugDrawer(LWJGL.getGL()));
+		sim.getDynamicsWorld().setDebugDrawer(new GLDebugDrawer(SimLWJGL.getGL()));
 
 		try{
-			LWJGL.main(args, screenwidth, screenheight, ("Cell Simulation:" + sg.inputFile.toString()), sim);
+			SimLWJGL.main(args, screenwidth, screenheight, ("Cell Simulation:" + sg.inputFile.toString()), sim);
 		}
 		catch(LWJGLException e){
 			System.err.println("Could not run simulation.  Error: " + e.toString());

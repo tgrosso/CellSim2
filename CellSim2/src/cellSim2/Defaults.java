@@ -37,13 +37,14 @@ public class Defaults {
 	private static final HashMap<String, String[]> defaults = new HashMap<String, String[]>();
 	static{
 		defaults.put("TimeZone", new String[]{"GMT"});
-		defaults.put("screenWidth", new String[]{"900"});
-		defaults.put("screenHeight", new String[]{"600"});
+		defaults.put("screenWidth", new String[]{"700"});
+		defaults.put("screenHeight", new String[]{"500"});
 		defaults.put("endTime", new String[]{"30"});
 		defaults.put("numCells", new String[]{"5"});
 		defaults.put("cellDetailLevel", new String[]{"1"});
 		defaults.put("displayImages", new String[]{"true"});
 		defaults.put("vessel", new String[]{"300", "90", "100"});
+		defaults.put("vesselColor", new String[]{"0", "0", ".8"});
 		defaults.put("distFromSource", new String[]{"0"});
 		defaults.put("generateImages", new String[]{"false"});
 		defaults.put("secBetweenOutput", new String[]{".5"});
@@ -65,16 +66,19 @@ public class Defaults {
 		proteinDefaults.put("bindsToSurface", "false");
 		proteinDefaults.put("membraneBound", "Fasle");
 		proteinDefaults.put("diffusible", "false");
+		proteinDefaults.put("halflife", "720");
 	}
 	
 	private HashMap<String, String[]> currentVals;
 	private HashMap<String, String> proteins;
 	private HashMap<String, ArrayList<String[]>> gradients;
+	private HashMap<String, ArrayList<String[]>> walls;
 	
 	public Defaults(){
 		currentVals = new HashMap<String, String[]>();
 		proteins = new HashMap<String, String>();
 		gradients = new HashMap<String, ArrayList<String[]>>();
+		walls = new HashMap<String, ArrayList<String[]>>();
 	}
 	
 	public void readInputFile(File input) throws IOException{
@@ -92,6 +96,7 @@ public class Defaults {
 					continue;
 				}
 				String var = valueVar[0];
+				//System.out.println("Defaults: var: " + var);
 				String[] value = Arrays.copyOfRange(valueVar, 1, valueVar.length);
 				//System.out.println(var + ": " + value.toString());
 				if (value == null || var == null){
@@ -138,6 +143,25 @@ public class Defaults {
 					
 					continue;
 				}
+				if (var.equals("wall")){
+					//System.out.println("var is wall");
+					if (value.length < 2){
+						System.err.println("Badly formatted input. Wall does not have enough arguments");
+						System.err.println("Correct format: wall<tab>ID number<tab>params");
+						continue;
+					}
+					String k = value[0];
+					String[] info = Arrays.copyOfRange(value, 1, value.length);
+					if (!walls.containsKey(k)){
+						ArrayList<String[]> vals = new ArrayList<String[]>();
+						vals.add(info);
+						walls.put(k, vals);
+					}
+					else{
+						walls.get(k).add(info);
+					}
+					continue;
+				}
 				if (!Defaults.variableExists(var)){
 					System.err.println("Varible " + var + " does not exist.");
 					continue;
@@ -148,12 +172,14 @@ public class Defaults {
 		
 		//print out proteins and gradients hashmaps
 		System.out.println("This is what defaults has entered:");
+		System.out.println("PROTEINS");
 		for (String name: proteins.keySet()){
 
             String key =name.toString();
             String value = proteins.get(name).toString();  
             System.out.println(key + " " + value);  
          }
+		 System.out.println("GRADIENTS");
 	     for (String key: gradients.keySet()){
             ArrayList<String[]> value = gradients.get(key);
             System.out.println(key + ":");
@@ -164,6 +190,17 @@ public class Defaults {
             	System.out.println("");
             }
          }
+	     System.out.println("WALLS");
+	     for (String key: walls.keySet()){
+	            ArrayList<String[]> value = walls.get(key);
+	            System.out.println(key + ":");
+	            for (int i = 0; i < value.size(); i++){
+	            	for (int j = 0; j < value.get(i).length; j++){
+	            		System.out.print(value.get(i)[j] + " ");
+	            	}
+	            	System.out.println("");
+	            }
+	      }
 		br.close();
 		isr.close();
 		fis.close();
@@ -225,6 +262,10 @@ public class Defaults {
 	
 	public HashMap<String, ArrayList<String[]>> getGradients(){
 		return gradients;
+	}
+	
+	public HashMap<String, ArrayList<String[]>> getWalls(){
+		return walls;
 	}
 	
 	public boolean getValue(boolean b, String key) throws SimException{

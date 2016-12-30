@@ -103,4 +103,10 @@ public class ZeroGradient implements Gradient{
 		p.println("\tProtein ID: "+ getProtein());
 		p.println("\tConcentration: " + concentration);
 	}
+	
+	@Override
+	public String getDataHeaders(){
+		String s = "Time Since Sim Start\tProtein\tConcentration\n";
+		return s;
+	}
 }

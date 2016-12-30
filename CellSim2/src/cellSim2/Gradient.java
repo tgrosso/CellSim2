@@ -36,5 +36,6 @@ public interface Gradient {
 	public void setMaxConcentration(float c);
 	public void setMinConcentration(float c);
 	public void print(PrintStream p);
+	public String getDataHeaders();
 	
 }

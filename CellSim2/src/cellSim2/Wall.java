@@ -27,7 +27,8 @@ import com.bulletphysics.linearmath.Transform;
 import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
 
-
+import java.io.BufferedWriter;
+import java.io.IOException;
 import java.nio.FloatBuffer;
 
 import javax.vecmath.Vector3f;
@@ -39,9 +40,9 @@ public class Wall implements SimObject{
 	private static int wall_ids = 0;
 	protected SimRigidBody body;
 	protected BoxShape wallShape;
-	protected Vector3f origin;
+	protected Vector3f origin, size;
 	protected float[] wallColor = {0.2f, 0.2f, 0.2f, 1f};
-	protected float width, height, depth;
+	//protected float width, height, depth;
 	protected static FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
 	protected boolean visible = true;
 	protected boolean toRemove = false;
@@ -49,23 +50,28 @@ public class Wall implements SimObject{
 	protected Simulation sim;
 	protected boolean bound = false;
 	protected static boolean finalWritten = false;
+	protected int[] coatPros;
+	protected float[] coatConc;//initial concentrations of coating proteins
+	protected long lastProteinUpdate;
+	//protected float distanceFromSource = 0f;
+	protected BufferedWriter outputFile = null;
 	
 	public Wall(Simulation s, float w, float h, float d, Vector3f o){
 		float mass = 0;
 		sim = s;
-		width = w;
-		height = h;
-		depth = d;
-		origin = o;
+		size = new Vector3f(w, h, d);
+		origin = new Vector3f(o);
 		Transform t = new Transform();
 		t.setIdentity();
 		t.origin.set(origin);
 				
 		Vector3f localInertia = new Vector3f(0, 0, 0);
-		wallShape = new BoxShape(new Vector3f(width/2, height/2, depth/2));
+		wallShape = new BoxShape(new Vector3f(w/2, h/2, d/2));
 		DefaultMotionState motionState = new DefaultMotionState(t);
 		RigidBodyConstructionInfo rbInfo = new RigidBodyConstructionInfo(mass, motionState, wallShape, localInertia);
 		body = new SimRigidBody(rbInfo, this);
+		
+		lastProteinUpdate = sim.getCurrentTimeMicroseconds();
 		
 		this.id = wall_ids;
 		wall_ids++;
@@ -79,9 +85,34 @@ public class Wall implements SimObject{
 		return body;
 	}
 	
+	public void coatWithProtein(int proId, float surfaceConc){
+		if (coatPros == null){
+			coatPros = new int[1];
+			coatConc = new float[1];
+			coatPros[0] = proId;
+			coatConc[0] = surfaceConc;
+		}
+		else{
+			int[] newPros = new int[coatPros.length+1];
+			float[] newConc = new float[coatConc.length+1];
+			for (int i = 0; i < coatPros.length; i++){
+				newPros[i] = coatPros[i];
+				newConc[i] = coatConc[i];
+			}
+			newPros[coatPros.length] = proId;
+			newConc[coatConc.length] = surfaceConc;
+			coatPros = newPros;
+			coatConc = newConc;
+		}
+	}
+	
 	public void updateObject(){
 		//TODO Find the proteins that are bound to the wall
 		//Update each one for degradation over time
+		//Only update the coatings every 5 seconds
+		if (sim.getCurrentTimeMicroseconds() - lastProteinUpdate > 5*1000*1000){
+			//update the proteins
+		}
 	}
 	
 	public Vector3f getColor3Vector(){
@@ -101,6 +132,23 @@ public class Wall implements SimObject{
 	
 	public String toString(){
 		return ("I am wall number " + id);
+	}
+	
+	public static String getDataHeaders(){
+		String s = "Time Since Sim Start\tWall ID\tProtein\tSurface Concentration\n";
+		return s;
+	}
+	
+	public String getOutputData(){
+		if (coatPros == null){
+			return "";
+		}
+		String s = "";
+		for (int i = 0; i < coatPros.length; i++){
+			s = s + sim.getFormattedTime() + "\t" + this.id + "\t";
+			s = s + sim.getProteinName(coatPros[i]) + "\t" + coatConc[i] + "\n";
+		}
+		return s;
 	}
 	
 	public void setVisible(boolean v){
@@ -136,6 +184,13 @@ public class Wall implements SimObject{
 	public float getMass(){
 		return (0.0f);
 	}
+	public Vector3f getSize(){
+		return size;
+	}
+	
+	public Vector3f getOrigin(){
+		return origin;
+	}
 	
 	public void destroy(){
 		body.destroy();
@@ -163,12 +218,41 @@ public class Wall implements SimObject{
 		bound = true;
 	}
 	
+	public void setOutputFile(BufferedWriter bw){
+		outputFile = bw;
+	}
+	
+	public void writeOutput(){
+		if (outputFile != null && coatPros != null && coatPros.length > 0){
+			//"Time Since Sim Start\tWall ID\tProtein\tSurface Concentration\n";
+			for (int i = 0; i < coatPros.length; i++){
+				String s = sim.getFormattedTime() + "\t" + getID() + "\t" + sim.getProteinName(i) + "\t" + coatConc[i] + "\n";
+				try{
+					outputFile.write(s);
+				}
+				catch(IOException e){
+					sim.writeToLog(sim.getFormattedTime() + "\t" + "Unable to write to wall file" + "\t" + e.toString());
+				}
+			}
+		}
+	}
+	
 	public String finalOutput(){
 		if (finalWritten){
 			return "";
 		}
 		finalWritten = true;
-		return "Need to write final output from CMWall";
+		if (outputFile != null && coatPros != null && coatPros.length > 0){
+			//"Time Since Sim Start\tWall ID\tProtein\tSurface Concentration\n";
+			String s = "";
+			for (int i = 0; i < coatPros.length; i++){
+				s = s +sim.getFormattedTime() + "\t" + getID() + "\t" + sim.getProteinName(i) + "\t" + coatConc[i] + "\n";
+			}
+			return s;
+		}
+		else{
+			return "";
+		}
 	}
 	
 	public void wrapup(){

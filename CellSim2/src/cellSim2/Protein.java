@@ -36,6 +36,7 @@ public class Protein {
 	private boolean membraneBound;
 	private boolean diffusible;
 	private int myId;
+	private float halflife, decayRate;
 
 	/**
 	 * A class to represent a protein in simulation
@@ -47,10 +48,12 @@ public class Protein {
 		bindsToSurface = false;
 		membraneBound = false;
 		diffusible = false;
+		halflife = 720f;
 		try{
 			bindsToSurface = Boolean.parseBoolean(Defaults.getSpecialDefault("Protein", "bindsToSurface"));
 			membraneBound = Boolean.parseBoolean(Defaults.getSpecialDefault("Protein", "membraneBound"));
 			diffusible = Boolean.parseBoolean(Defaults.getSpecialDefault("Protein", "diffusible"));
+			halflife = Float.parseFloat(Defaults.getSpecialDefault("Protein", "halflife"));
 		}
 		catch(NumberFormatException e){
 			System.err.println("Could not get default values for protein " + name);
@@ -62,6 +65,8 @@ public class Protein {
 		catch(IOException e){
 			System.err.println("Could not read input file for protein " + name);
 		}
+		halflife = halflife * 1000; //convert to miliseconds
+		decayRate = halflife / 0.693147180559945f;
 	}
 	
 	public void readInputFile(String filename) throws IOException{
@@ -98,7 +103,11 @@ public class Protein {
 	        			f.setBoolean(this, Boolean.parseBoolean(value));
 	        			//System.out.println(f.getName() + " " + f.getBoolean(this));
 	        			break;
+					case "float":
+						f.setFloat(this, Float.parseFloat(value));
+						break;
 					}
+						
 				}catch(NoSuchFieldException e){
 					System.err.println("Protein " + name + " variable " + var + " does not exist");
 				}
@@ -128,6 +137,10 @@ public class Protein {
 		return diffusible;
 	}
 	
+	public float getDecayRate(){
+		return decayRate;
+	}
+	
 	public int getId(){
 		return myId;
 	}
@@ -138,5 +151,7 @@ public class Protein {
 		p.println("\tBinds to surfaces: " + canBindToSurface());
 		p.println("\tBinds to membranes: " + canBindToMembrane());
 		p.println("\tDiffusible: " + canDiffuse());
+		p.println("\tHalflife: " + this.halflife);
+		p.println("\tDecayRate: " + getDecayRate());
 	}
 }
