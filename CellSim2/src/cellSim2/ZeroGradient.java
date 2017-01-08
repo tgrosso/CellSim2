@@ -19,7 +19,9 @@
 
 package cellSim2;
 
+import java.io.BufferedWriter;
 import java.io.PrintStream;
+import java.io.IOException;
 
 import javax.vecmath.Vector3f;
 
@@ -29,6 +31,7 @@ public class ZeroGradient implements Gradient{
 	protected int proteinId;
 	protected float[] baseColor = {0.0f, 1.0f, 0.0f, 1.0f};
 	protected int axis;
+	protected BufferedWriter outputFile;
 	
 	/**
 	 * Represents a solution of ligand with a constant concentration throughout
@@ -108,5 +111,19 @@ public class ZeroGradient implements Gradient{
 	public String getDataHeaders(){
 		String s = "Time Since Sim Start\tProtein\tConcentration\n";
 		return s;
+	}
+	
+	public void setOutputFile(BufferedWriter bw){
+		outputFile = bw;
+	}
+	
+	public void writeOutput(Simulation sim){
+		String s = sim.getFormattedTime() + "\t" + sim.getProteinName(proteinId) + "\t" +concentration + "\n";
+		try{
+			outputFile.write(s);
+		}
+		catch(IOException e){
+			sim.writeToLog(sim.getFormattedTime() + "\tCould not write concentrations from Zero Gradient " + sim.getProteinName(proteinId)+"\t" + e.toString()+"\n");
+		}
 	}
 }

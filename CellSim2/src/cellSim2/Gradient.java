@@ -18,6 +18,7 @@
  */
 package cellSim2;
 
+import java.io.BufferedWriter;
 import java.io.PrintStream;
 import javax.vecmath.Vector3f;
 
@@ -37,5 +38,6 @@ public interface Gradient {
 	public void setMinConcentration(float c);
 	public void print(PrintStream p);
 	public String getDataHeaders();
-	
+	public void setOutputFile(BufferedWriter bw);
+	public void writeOutput(Simulation sim);
 }

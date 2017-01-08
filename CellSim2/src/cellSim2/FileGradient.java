@@ -20,6 +20,7 @@ package cellSim2;
 
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -41,6 +42,7 @@ public class FileGradient implements Gradient{
 	
 	private File source;
 	private BufferedReader br;
+	private BufferedWriter outputFile;
 	private boolean gradientSuccessful;
 	private boolean finalConcentrations;
 	
@@ -48,13 +50,14 @@ public class FileGradient implements Gradient{
 	float[] distances;
 	float[] prevConc;
 	float[] nextConc;
-	long previousTime; //These times should be in milliseconds, although they are read in as seconds
+	long previousTime; //These times should be in microseconds, although they are read in as seconds
 	long nextTime;
 	
 	public FileGradient(int protein, String filename, float[] col) {
 		proteinId = protein;
 		gradientSuccessful = false;
 		finalConcentrations = false;
+		outputFile = null;
 		axis = 0;
 		maxConcentration = Float.MIN_VALUE;
 		minConcentration = Float.MAX_VALUE;
@@ -73,6 +76,7 @@ public class FileGradient implements Gradient{
 		source = new File(filename);
 		//Try to initialize distances from file and determine minimum and maximum concentrations
 		try {
+			System.out.println("Initializing File Gradient (about line 79");
 			String line = "";
             br = new BufferedReader(new FileReader(source));
             
@@ -82,43 +86,109 @@ public class FileGradient implements Gradient{
             if (lineText.length < 2){
             	throw new SimException("Gradient File must have at least one distance included");
             }
+            for (int i = 0; i < lineText.length; i++){
+            	System.out.println(lineText[i]);
+            }
+
+            
             distances = new float[lineText.length-1];
             //First line is distances. First cell should be empty
             for (int i = 1; i < lineText.length; i++){
             	distances[i-1] = Float.parseFloat(lineText[i]);
             }
+            for (int i = 0; i < distances.length; i++){
+            	System.out.println(distances[i]);
+            }
             prevConc = new float[distances.length];
             nextConc = new float[distances.length];
             
-            //Now read in all of the concentrations to get maximum and minimum values
-            //Also set up the first pair of concentration values
-            int count = 0;
+            //Read in the next line to get the first time and the first concentration values
+            line = br.readLine();
+            lineText = line.split(",");
+            float value = Float.parseFloat(lineText[0]);
+            if (value > 0){
+            	//First time given is not 0. We'll set previous and next concentrations to same value
+            	nextTime = (long)(value*1.0e6);
+            	for (int i = 1; i < lineText.length; i++){
+            		value = Float.parseFloat(lineText[i]);
+            		prevConc[i-1] = value;
+            		nextConc[i-1] = value;
+            		if (value > maxConcentration){
+            			maxConcentration = value;
+            		}
+            		if (value < minConcentration){
+            			minConcentration = value;
+            		}
+            	}
+            	previousTime = -1L;
+            }
+            else{
+            	//First time is zero (or less?)
+            	previousTime = (long)(value * 1.0e6); //Times in microseconds!
+            	for (int i = 1; i < lineText.length; i++){
+            		value = Float.parseFloat(lineText[i]);
+            		prevConc[i-1] = value;
+            		if (value > maxConcentration){
+            			maxConcentration = value;
+            		}
+            		if (value < minConcentration){
+            			minConcentration = value;
+            		}
+            	}
+            }
+            //System.out.println("previousTime " + previousTime);
+            //System.out.println("Max Conc: "  + maxConcentration);
+            //System.out.println("Min Conc: " + minConcentration);
+            //for (int i = 0; i < prevConc.length; i++){
+            //	System.out.print(prevConc[i] + "      ");
+            //}
+            //System.out.println("");
+            
+            //If initial time was zero, read in the next line to get the next set of concentrations
+            if (previousTime >= 0){
+            	line = br.readLine();
+            	lineText = line.split(",");
+            	value = Float.parseFloat(lineText[0]);
+            	nextTime = (long)(value* 1.0e6);
+            	for (int i = 1; i < lineText.length; i++){
+            		value = Float.parseFloat(lineText[i]);
+            		if (value > maxConcentration){
+            			maxConcentration = value;
+            		}
+            		if (value < minConcentration){
+            			minConcentration = value;
+            		}
+            		nextConc[i-1] = value;
+        		}
+            }
+            if (previousTime < 0){
+            	previousTime = 0L;
+            }
+            //System.out.println("previousTime " + previousTime);
+            //System.out.println("nextTime " + nextTime);
+            //System.out.println("Max Conc: "  + maxConcentration);
+            //System.out.println("Min Conc: " + minConcentration);
+            //for (int i = 0; i < nextConc.length; i++){
+            //	System.out.print(nextConc[i] + "      ");
+            //}
+            //System.out.println("");
+           
+            //Now read in the rest of the concentrations to get maximum and minimum values
             while ((line = br.readLine()) != null) {
                 lineText = line.split(",");
-                for (int i = 0; i < lineText.length; i++){
-                		float value = Float.parseFloat(lineText[i]);
+                //for (int i = 0; i < lineText.length; i++){
+                //	System.out.print(lineText[i] +"    ");
+                //}
+                //System.out.println("");
+                //Start looking for concentrations at position 1 - zero is the time
+                for (int i = 1; i < lineText.length; i++){
+                		value = Float.parseFloat(lineText[i]);
                 		if (value > maxConcentration){
                 			maxConcentration = value;
                 		}
                 		if (value < minConcentration){
                 			minConcentration = value;
-                		}
-                		if (count == 0){
-                			if (i == 0){
-                				previousTime = (long) (value * 1000000);
-                			}
-                			else{
-                				prevConc[i-1] = value;
-                			}
-                		}
-                		else if (count == 1){
-                			if (i == 0){
-                				nextTime = (long)(value * 1000000);
-                			}
-                			else{
-                				nextConc[i-1] = value;
-                			}
-                		}
+                		}   
                 }
             }
             gradientSuccessful = true;
@@ -138,7 +208,7 @@ public class FileGradient implements Gradient{
             minConcentration = 0f;
         }
 		catch (NumberFormatException e){
-        	System.err.println("Error reading number from file. Incorrectly formatted.");
+        	System.err.println("Error reading number from file. Incorrectly formatted. ");
         	maxConcentration = 0f;
         	minConcentration = 0f;
         }
@@ -164,27 +234,37 @@ public class FileGradient implements Gradient{
 	
 	@Override
 	public float getConcentration(long time, Vector3f position){
+		//System.out.println("Getting concentration at " + time + "micro_sec at " + position.toString());
+		//Time is in microseconds!!!
 		float[] pos = new float[3];
 		position.get(pos); //pos has the values copied from position
 		if (gradientSuccessful){
-			if (time  > nextTime ){
+			if (time  > nextTime && !finalConcentrations){
 				//pull in the next line of the file - The first number should be the time > nextTime
+				//System.out.println("Pulling in next line of concentrations");
 				try {
 					String line = "";
 		            br = new BufferedReader(new FileReader(source));
+		            //skip first line - no time data
+		            line = br.readLine();
 		            
 		            while ((line = br.readLine()) != null) {
 		            	String[] lineText = line.split(",");
 		            	float value = Float.parseFloat(lineText[0]);
-		            	long t = (long) (value * 1000000);
+		            	long t = (long) (value * 1.0e6);
 		            	if (t > nextTime){
 		            		previousTime = nextTime;
 		            		nextTime = t;
-		            		for (int i = 1; i < prevConc.length; i++){
+		            		for (int i = 1; i <= prevConc.length; i++){
 		            			prevConc[i-1] = nextConc[i-1];
 		            			value = Float.parseFloat(lineText[i]);
 		            			nextConc[i-1] = value;
 		            		}
+		            		//System.out.print("Previous Time: " + previousTime + ", ");
+		            		//System.out.print("Next Time " + nextTime);
+		            		//for (int i = 0; i < nextConc.length; i++){
+		            		//	System.out.println("Prev Conc: " + prevConc[i] + " Next Conc: " + nextConc[i]);
+		            		//}
 		            		break;
 		            	}
 		            }
@@ -226,7 +306,7 @@ public class FileGradient implements Gradient{
 			//find the two distances that position is in between given the axis
 			int lastPos = 0;
 			int nextPos = 1;
-			while (pos[axis] >= distances[nextPos] && nextPos < distances.length){
+			while (pos[axis] >= distances[nextPos] && nextPos < distances.length-1){
 					lastPos = nextPos;
 					nextPos++;
 			}
@@ -236,7 +316,9 @@ public class FileGradient implements Gradient{
 			//ratio from previousDistance to position
 			float distDiff = pos[axis] - distances[lastPos];
 			float distRatio = distDiff / (float)(distances[nextPos] - distances[lastPos]);
-			if (pos[axis]>distances[nextPos]){
+			
+			//System.out.println(distances[lastPos] + ", " + distances[nextPos] + ", " + pos[axis]);
+			if (pos[axis]>=distances[nextPos]){
 				//The distance is beyond the end of the given concentrations
 				//return the concentrations at the maximum distances (nextPos) at this time
 				if (finalConcentrations){
@@ -337,6 +419,26 @@ public class FileGradient implements Gradient{
 	
 	public boolean successfullyMade(){
 		return gradientSuccessful;
+	}
+	
+	public void setOutputFile(BufferedWriter bw){
+		outputFile = bw;
+	}
+	
+	public void writeOutput(Simulation sim){
+		String s = sim.getFormattedTime() + "\t" + sim.getProteinName(proteinId);
+		for (int i = 0; i < distances.length; i++){
+			float[] position = new float[]{0, 0, 0};
+			position[axis] = distances[i];
+			s = s + "\t"+ getConcentration(sim.getCurrentTimeMicroseconds(), new Vector3f(position));
+		}
+		s = s + "\n";
+		try{
+			outputFile.write(s);
+		}
+		catch(IOException e){
+			sim.writeToLog(sim.getFormattedTime() + "\tFailed to write to gradient-" + sim.getProteinName(proteinId));
+		}
 	}
 	
 	@Override

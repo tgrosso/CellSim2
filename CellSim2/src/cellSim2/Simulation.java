@@ -63,7 +63,7 @@ public class Simulation extends DemoApplication{
 	private ConstraintSolver solver;
 	
 	private ObjectArrayList<SimObject> modelObjects;
-	private ObjectArrayList<Gradient> gradients;
+	//private ObjectArrayList<Gradient> gradients;
 
 	private float baseCameraDistance = 150;
 	private boolean needGImpact = false;
@@ -75,8 +75,10 @@ public class Simulation extends DemoApplication{
 	
 	private Random random;
 	
-	private BufferedWriter logFile, cellData, wallData;
+	private BufferedWriter logFile, cellData, wallData, gradientTestFile;
 	private ObjectArrayList<BufferedWriter> gradientDataFiles;
+	
+	int testWidth;
 	
 	public Simulation(IGL gl, SimGenerator s) {
 		super(gl);
@@ -94,6 +96,7 @@ public class Simulation extends DemoApplication{
 		
 		random = new Random();
 		gradientDataFiles = new ObjectArrayList<BufferedWriter>();
+		testWidth = 1200;
 		
 		//Set up the output files
 		try{
@@ -103,19 +106,25 @@ public class Simulation extends DemoApplication{
 			wallData = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "wallData.csv")));
 			wallData.write(Wall.getDataHeaders());
 			for (int i = 0; i < simValues.gradients.size(); i++){
-				String proteinName = getProteinName(simValues.gradients.get(i).getProtein());
+				Gradient g = simValues.gradients.get(i);
+				String proteinName = getProteinName(g.getProtein());
 				BufferedWriter gradData = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "gradient"+proteinName+"_"+i+".csv")));
 				gradientDataFiles.add(gradData);
 				gradData.write(simValues.gradients.get(i).getDataHeaders());
-				
+				g.setOutputFile(gradData);
 			}
+			gradientTestFile = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "gradientTest.csv")));
+			String str = "Time Since Start\tProtein";
+			for (int i = 0; i < testWidth; i+=100){
+				str += "\t" + i;
+			}
+			str += "\n";
+			gradientTestFile.write(str);
 		}
 		catch (IOException e){
 			System.err.println("Cannot generate output files!");
 		}
 		writeToLog(getFormattedTime() + "\tIntialization Complete");
-		writeToLog("currentTime = " + currentTime);
-		writeToLog("formattedTime = " + getFormattedTime());
 	}
 	
 	@Override
@@ -161,7 +170,7 @@ public class Simulation extends DemoApplication{
 	
 	@Override
 	public void clientMoveAndDisplay() {
-		long secSinceOutput = (currentTime - lastDataOutput)/(1000*1000);
+		float secSinceOutput = (float)((currentTime - lastDataOutput)/(1.0e6));
 		if (lastDataOutput < 0 || secSinceOutput >= simValues.secBetweenOutput){
 			outputData();
 			lastDataOutput = currentTime;
@@ -193,6 +202,9 @@ public class Simulation extends DemoApplication{
 			//glutSwapBuffers();
 		}
 		
+		if (currentTime >= simValues.endTime*1e6){
+			finished = true;
+		}
 	}
 	
 	@Override
@@ -265,6 +277,23 @@ public class Simulation extends DemoApplication{
 			SimObject bioObj = modelObjects.getQuick(i);
 			bioObj.writeOutput();
 		}
+		for (int i = 0; i < simValues.gradients.size(); i++){
+			Gradient g = simValues.gradients.get(i);
+			g.writeOutput(this);
+			//Debugging
+			String s = getFormattedTime() + "\t" + getProteinName(g.getProtein());
+			for (int j = 0; j < testWidth; j+=100){
+				s = s + "\t" + g.getConcentration(currentTime, new Vector3f(j, 0, 0));
+			}
+			s += "\n";
+			try{
+				gradientTestFile.write(s);
+			}
+			catch(IOException e){
+				System.err.println("Could not write to gradient test file");
+			}
+		}
+		
 	}
 	
 	public boolean renderDisplay(){
@@ -289,7 +318,7 @@ public class Simulation extends DemoApplication{
 		long sec = (millisec / 1000) % 60;
 		long min = (millisec / (1000 * 60)) % 60;
 		long hour = (millisec / (1000 * 60 * 60));
-		String time = String.format("%02d:%02d:%02d:%d", hour, min, sec, mil);
+		String time = String.format("%02d:%02d:%02d.%03d", hour, min, sec, mil);
 		return time;
 	}
 	
@@ -345,6 +374,8 @@ public class Simulation extends DemoApplication{
 				gradientDataFiles.get(i).flush();
 				gradientDataFiles.get(i).close();
 			}
+			gradientTestFile.flush();
+			gradientTestFile.close();
 		}
 		catch(IOException e){
 			String s = "Unable to close output files";
