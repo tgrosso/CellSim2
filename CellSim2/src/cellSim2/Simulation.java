@@ -308,8 +308,16 @@ public class Simulation extends DemoApplication{
 		return simValues.getProteinName(id);
 	}
 	
+	public Protein getProtein(int id){
+		return simValues.proteins.get(id);
+	}
+	
 	public long getCurrentTimeMicroseconds(){
 		return currentTime;
+	}
+	
+	public BufferedWriter getWallFile(){
+		return wallData;
 	}
 	
 	public String getFormattedTime(){
@@ -346,7 +354,7 @@ public class Simulation extends DemoApplication{
 	public void writeToLog(String s){
 		if (logFile != null){
 			try{
-				logFile.write(s);
+				logFile.write(getFormattedTime() + ", " + s);
 				logFile.newLine();
 				logFile.flush();
 			}

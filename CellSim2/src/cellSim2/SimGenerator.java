@@ -275,43 +275,48 @@ public class SimGenerator {
 		//bottom
 		position.set(0f, -(float)((channelHeight+wallThick)/2.0), 0f);
 		nextWall = new Wall(sim, channelWidth, wallThick, channelDepth, position); 
-		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
+		nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
 		nextWall.setVisible(true);
+		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
 		System.out.println("Bottom: " + nextWall.toString());
 		
 		//top
 		position.set(0f, (float)((channelHeight+wallThick)/2.0), 0f);
 		nextWall = new Wall(sim, channelWidth, wallThick, channelDepth, position); 
-		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
+		nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
 		nextWall.setVisible(true);
+		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
 		System.out.println("Top: " +nextWall.toString());
 		
 		//back
 		position.set(0f, 0f, (float)((channelDepth+wallThick)/2.0));
 		nextWall = new Wall(sim, channelWidth, channelHeight, wallThick, position); 
-		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
+		nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
 		nextWall.setVisible(false);
+		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
 		System.out.println("Back: " + nextWall.toString());
 		
 		//front
 		position.set(0f, 0f, -(float)((channelDepth+wallThick)/2.0));
 		nextWall = new Wall(sim, channelWidth, channelHeight, wallThick, position); 
-		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
+		nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
 		nextWall.setVisible(false);
+		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
 		System.out.println("Front: "+nextWall.toString());
 		
-		/*
+		
 		//left
 		position.set((float)((channelWidth+wallThick)/2.0), 0f, 0f);
 		nextWall = new Wall(sim, wallThick, channelHeight, channelDepth, position); 
-		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
+		nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
 		nextWall.setVisible(true);
+		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
-		System.out.println("Left: " + nextWall.toString());*/
+		System.out.println("Left: " + nextWall.toString());
 		
 		sim.setBaseCameraDistance((float)((channelWidth/2)*(1.05)*Math.tan(Math.PI/3)));
 		
@@ -341,7 +346,7 @@ public class SimGenerator {
 						System.err.println("Wall id is not valid. " + thisGrad[0]);
 						continue;
 					}
-					//System.out.println("SG329 - Adding gradient to wall " + thisWall);
+					System.out.println("SG349 - Adding gradient to wall " + thisWall);
 					//Change the wall in the ArrayList to a gradient wall with this gradient
 					int pro = -1;
 					for (int j = 0; j < proteins.size(); j++){
@@ -374,7 +379,7 @@ public class SimGenerator {
 					Vector3f oldSize = oldWall.getSize();
 					GradientWall newWall = new GradientWall(sim, oldSize.x, oldSize.y, oldSize.z, oldWall.getOrigin(), g);
 					newWall.setVisible(true);
-					newWall.setColor(0.6f, 0.6f, 1.0f);
+					newWall.setWallColor(0.6f, 0.6f, 1.0f);
 					newWall.setDistFromSource(distFromSource);
 					walls.set(thisWall, newWall);
 				}
@@ -385,7 +390,7 @@ public class SimGenerator {
 					String[] thisCoat = coats.get(i);
 					if (thisCoat.length < 3){
 						System.err.println("Bad input for coating wall. Not enough values");
-						System.err.println("Usage: wall caot wallID protein surfaceConcentration");
+						System.err.println("Usage: wall coat wallID protein surfaceConcentration");
 						System.err.println("Not using");
 						continue;
 					}
@@ -403,6 +408,7 @@ public class SimGenerator {
 					}
 					//Coat this wall with the appropriate protein
 					int pro = -1;
+					System.out.println("SG411 - Adding protein coat to wall " + thisWall);
 					for (int j = 0; j < proteins.size(); j++){
 						Protein n = proteins.get(j);
 						if (n.getName().equals(thisCoat[1])){

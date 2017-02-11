@@ -41,7 +41,9 @@ public class GradientWall extends Wall {
 		if (w < drawnSegments){
 			drawnSegments = (int)w;
 		}
-		startPoint = new Vector3f((float)(w/2.0)+o.x, (float)(h/2.0)+o.y, (float)(d/2.0)+o.z);
+		System.out.println("Size: " + size + " origin: " + origin);
+		//startPoint = new Vector3f(-(float)(size.x/2.0)+o.x, (float)(size.y/2.0)+o.y, (float)(size.z/2.0)+o.z);
+		startPoint = new Vector3f(-(float)(size.x/2.0)+o.x, (float)(size.y/2.0)+o.y, (float)(size.z/2.0));
 		//System.out.println(this.id);
 	}
 
@@ -61,27 +63,44 @@ public class GradientWall extends Wall {
 	public boolean specialRender(IGL gl, Transform t){
 		if (grad == null){
 			return false;
-		}/*
-		//get the time in milliseconds
-		long ti = sim.getCurrentTimeMicroseconds()/1000;
+		}
+		
+		//get the time 
+		long ti = sim.getCurrentTimeMicroseconds();
+		int axis = grad.getAxis();
 		
 		float[] wallSize = new float[3];
 		getSize().get(wallSize);
-		float blockSize = wallSize[grad.getAxis()]/(float)drawnSegments;
+		float blockSize = wallSize[axis]/(float)drawnSegments;
 		
-		float[] addOn = new float[]{-wallSize[0], -wallSize[1], 0f};
-		addOn[grad.getAxis()] = -blockSize;
-		if (grad.getAxis() == 2){
-			addOn[0] = 0f;
+		float[] diagonal = new float[3];
+		switch(axis){
+			case 0:
+				diagonal[0] = -blockSize;
+				diagonal[1] = -wallSize[1];//height
+				diagonal[2] = 0;
+				break;
+			case 1:
+				diagonal[0] = wallSize[0];//width
+				diagonal[1] = blockSize;
+				diagonal[2] = 0;
+				break;
+			case 2:
+				diagonal[0] = 0;
+				diagonal[1] = wallSize[1];
+				diagonal[2] = blockSize;
+				break;
 		}
-		Vector3f addOnVector = new Vector3f(addOn);
-		
+		Vector3f diagonalVector = new Vector3f(diagonal);
+		//System.out.println(diagonalVector);
+
 		float[] nextPos = new float[]{0f, 0f, 0f};
-		nextPos[grad.getAxis()] = -blockSize;
+		nextPos[axis] = blockSize;
 		Vector3f nextPositionVector = new Vector3f(nextPos);
+		//System.out.println(nextPositionVector);
 		
 		float[] dist = new float[]{0f, 0f, 0f};
-		dist[grad.getAxis()] = distanceFromSource;
+		dist[axis] = distanceFromSource;
 		Vector3f distVector = new Vector3f(dist);
 		
 		gl.glPushMatrix();
@@ -91,15 +110,13 @@ public class GradientWall extends Wall {
 		GL11.glNormal3f( 0f, 0f, -1f); 
 		Vector3f vecOne = new Vector3f(startPoint);
 		Vector3f vecTwo = new Vector3f(vecOne);
-		vecTwo.add(addOnVector);
+		vecTwo.add(diagonalVector);
 		for (int i = 0; i < drawnSegments; i++){
 			//Find the concentration at this time and position
+			//System.out.println("VecOne: " + vecOne + " VecTwo: " + vecTwo);
 			Vector3f gradPos = new Vector3f();
 			gradPos.add(vecOne, distVector);
 			float[] color = grad.getColor(grad.getConcentration(ti, gradPos));
-			color[0] = 0.0f;
-			color[1] = 0.0f;
-			color[2] = 0.0f;
 			GL11.glColor3f(color[0], color[1], color[2]);
 			GL11.glBegin(GL11.GL_QUADS);
 			//System.out.println(i + "ri: " + ri + " le: " + le + " con: " + con + " mi: " + mi);
@@ -108,15 +125,14 @@ public class GradientWall extends Wall {
 			GL11.glVertex3f(vecTwo.x, vecTwo.y, vecTwo.z);
 			GL11.glVertex3f(vecOne.x, vecTwo.y, vecOne.z);
 			GL11.glEnd();
-			vecOne = new Vector3f(vecTwo);
-			vecTwo = new Vector3f(vecOne);
-			vecTwo.add(nextPositionVector);
-			System.out.println(startPoint + ", " + vecOne + ", " +addOnVector +", "+ vecTwo);
+			vecOne.add(nextPositionVector);
+			vecTwo.add(vecOne, diagonalVector);
+			//System.out.println(startPoint + ", " + vecOne + ", " +addOnVector +", "+ vecTwo);
 		}
 		gl.glPopMatrix();
 		
-		return true;*/
-		return false;
+		return true;
+		//return false;
 	}
 	
 	@Override

@@ -48,7 +48,7 @@ public class Protein {
 		bindsToSurface = false;
 		membraneBound = false;
 		diffusible = false;
-		halflife = 720f;
+		halflife = 0f;
 		try{
 			bindsToSurface = Boolean.parseBoolean(Defaults.getSpecialDefault("Protein", "bindsToSurface"));
 			membraneBound = Boolean.parseBoolean(Defaults.getSpecialDefault("Protein", "membraneBound"));
@@ -65,8 +65,8 @@ public class Protein {
 		catch(IOException e){
 			System.err.println("Could not read input file for protein " + name);
 		}
-		halflife = halflife * 1000; //convert to miliseconds
-		decayRate = halflife / 0.693147180559945f;
+		halflife = halflife; //halflife is given in minutes
+		decayRate = halflife / 0.693147180559945f;//TODO WTF?
 	}
 	
 	public void readInputFile(String filename) throws IOException{
@@ -139,6 +139,10 @@ public class Protein {
 	
 	public float getDecayRate(){
 		return decayRate;
+	}
+	
+	public float getHalfLife(){
+		return halflife;
 	}
 	
 	public int getId(){

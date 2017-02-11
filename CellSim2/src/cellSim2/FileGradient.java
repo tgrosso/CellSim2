@@ -365,11 +365,14 @@ public class FileGradient implements Gradient{
 			return newColor;
 		}
 		float ratio = (con-minConcentration)/(maxConcentration - minConcentration);
+		//System.out.print("Concentration: " + con + " color: ");
 		for (int i = 0; i < 3; i++){
 			float diff = 1.0f - baseColor[i];
 			float newCol = 1.0f - (ratio * diff);
 			newColor[i] = newCol;
+			//System.out.print(newColor[i] + "  ");
 		}
+		//System.out.println("");
 		return newColor;
 	}
 	

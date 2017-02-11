@@ -30,6 +30,7 @@ import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.FloatBuffer;
+import java.util.Arrays;
 
 import javax.vecmath.Vector3f;
 
@@ -38,9 +39,12 @@ import org.lwjgl.BufferUtils;
 
 public class Wall implements SimObject{
 	private static int wall_ids = 0;
+	protected static long updateTime = 5 * 1000 * 1000; //update proteins every 5 seconds
 	protected SimRigidBody body;
 	protected BoxShape wallShape;
 	protected Vector3f origin, size;
+	protected float[] maxWallColor, colorChange;
+	protected float[] minWallColor = {0.9f, 0.9f, 0.9f, 1f}; //bare wall is very light gray
 	protected float[] wallColor = {0.2f, 0.2f, 0.2f, 1f};
 	//protected float width, height, depth;
 	protected static FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
@@ -51,7 +55,9 @@ public class Wall implements SimObject{
 	protected boolean bound = false;
 	protected static boolean finalWritten = false;
 	protected int[] coatPros;
+	protected float[] initialCoatConc;
 	protected float[] coatConc;//initial concentrations of coating proteins
+	protected int visibleProtein;
 	protected long lastProteinUpdate;
 	//protected float distanceFromSource = 0f;
 	protected BufferedWriter outputFile = null;
@@ -71,6 +77,13 @@ public class Wall implements SimObject{
 		RigidBodyConstructionInfo rbInfo = new RigidBodyConstructionInfo(mass, motionState, wallShape, localInertia);
 		body = new SimRigidBody(rbInfo, this);
 		
+		maxWallColor = new float[4];
+		colorChange = new float[4];
+		for (int i = 0; i < 4; i++){
+			maxWallColor[i] = wallColor[i];
+			colorChange[i] = minWallColor[i] - maxWallColor[i];
+		}
+		
 		lastProteinUpdate = sim.getCurrentTimeMicroseconds();
 		
 		this.id = wall_ids;
@@ -86,23 +99,31 @@ public class Wall implements SimObject{
 	}
 	
 	public void coatWithProtein(int proId, float surfaceConc){
+		//System.out.println("I am wall " + id + " and I am being coated with protein " + proId);
 		if (coatPros == null){
 			coatPros = new int[1];
 			coatConc = new float[1];
+			initialCoatConc = new float[1];
 			coatPros[0] = proId;
 			coatConc[0] = surfaceConc;
+			initialCoatConc[0] = surfaceConc;
+			visibleProtein = 0;
 		}
 		else{
 			int[] newPros = new int[coatPros.length+1];
 			float[] newConc = new float[coatConc.length+1];
+			float[] newInitial = new float[initialCoatConc.length+1];
 			for (int i = 0; i < coatPros.length; i++){
 				newPros[i] = coatPros[i];
 				newConc[i] = coatConc[i];
+				newInitial[i] = initialCoatConc[i];
 			}
 			newPros[coatPros.length] = proId;
 			newConc[coatConc.length] = surfaceConc;
+			newInitial[initialCoatConc.length] = surfaceConc;
 			coatPros = newPros;
 			coatConc = newConc;
+			initialCoatConc = newInitial;
 		}
 	}
 	
@@ -110,8 +131,32 @@ public class Wall implements SimObject{
 		//TODO Find the proteins that are bound to the wall
 		//Update each one for degradation over time
 		//Only update the coatings every 5 seconds
-		if (sim.getCurrentTimeMicroseconds() - lastProteinUpdate > 5*1000*1000){
+		//TODO The frequency of wall updates should be a user parameter
+		long deltaTime = sim.getCurrentTimeMicroseconds() - lastProteinUpdate;
+		if (deltaTime > updateTime){
 			//update the proteins
+			if (coatPros == null){
+				//Nothing to do!
+				return;
+			}
+			double deltaMinutes = sim.getCurrentTimeMicroseconds() / 1000 / 1000 / 60.0;
+			for (int i = 0; i < coatPros.length; i++){
+				float halflife = sim.getProtein(coatPros[i]).getHalfLife();
+				double lambda = .693 / halflife;
+				//System.out.println("This protein's halflife is " + halflife  + " minutes.");
+				coatConc[i] = (float)(initialCoatConc[i] * Math.exp(-lambda * deltaMinutes));
+				if (visible && i == visibleProtein){
+					//update the wall color
+					float percentChange = 1-coatConc[i]/initialCoatConc[i];
+					//System.out.println("Percent of initial Conc" + percentChange);
+					for (int j = 0; j < 4; j++){
+						float color = maxWallColor[j] + percentChange * colorChange[j];
+						setColor(color, j);
+					}
+					sim.writeToLog("Wall id " + id + " concentration," + coatConc[i] + ",color " + Arrays.toString(wallColor) );
+				}
+			}
+			lastProteinUpdate = sim.getCurrentTimeMicroseconds();
 		}
 	}
 	
@@ -119,15 +164,52 @@ public class Wall implements SimObject{
 		return new Vector3f(wallColor[0], wallColor[1], wallColor[2]);
 	}
 	
-	public void setColor(float red, float green, float blue){
-		setColor(red, green, blue, 1.0f);
+	//private void setColor(float red, float green, float blue, float alpha){
+	//	wallColor[0] = red;
+	//	wallColor[1] = green;
+	//	wallColor[2] = blue;
+	//	wallColor[3] = alpha;
+	//}
+	
+	private void setColor(float value, int index){
+		wallColor[index] = value;
 	}
 	
-	public void setColor(float red, float green, float blue, float alpha){
-		wallColor[0] = red;
-		wallColor[1] = green; 
-		wallColor[2] = blue;
-		wallColor[3] = alpha;
+	public void setWallColor(float red, float green, float blue){
+		//setWallColor is for initialization, not setting the current color
+		setWallColor(red, green, blue, 1.0f);
+	}
+	
+	public void setWallColor(float red, float green, float blue, float alpha){
+		maxWallColor[0] = wallColor[0] = red;
+		maxWallColor[1] = wallColor[1] = green; 
+		maxWallColor[2] = wallColor[2] = blue;
+		maxWallColor[3] = wallColor[3] = alpha;
+		for (int i = 0; i < 4; i++){
+			colorChange[i] = minWallColor[i] - maxWallColor[i];
+		}
+		System.out.println("Wall id " + id + " current color: " + Arrays.toString(wallColor));
+	}
+	
+	public void setVisibleProtein(int proID){
+		//Find out if the protein id is in the list of coating proteins
+		if (coatPros == null || coatPros.length == 0){
+			//No coating proteins. Do nothing
+			return;
+		}
+		int pro = -1;
+		for (int i = 0; i < coatPros.length; i++){
+			if (coatPros[i] == proID){
+				pro = i;
+			}
+		}
+		if (pro < 0){
+			sim.writeToLog("Trying to set wall visible protein to protein id " + proID + ".");
+			sim.writeToLog("Protein is not a coating protein.");
+		}
+		else{
+			visibleProtein = pro;
+		}
 	}
 	
 	public String toString(){
@@ -220,9 +302,14 @@ public class Wall implements SimObject{
 	
 	public void setOutputFile(BufferedWriter bw){
 		outputFile = bw;
+		//System.out.println("I am wall number: " + id + " and my outputfile is " + outputFile.toString());
 	}
 	
 	public void writeOutput(){
+		//sim.writeToLog("I am wall " + id + " and I am writing output. My outputFile is " + outputFile.toString());
+		//if (outputFile == null){
+		//	System.out.println("I am wall " + id + " and I have no outputfile! :-(");
+		//}
 		if (outputFile != null && coatPros != null && coatPros.length > 0){
 			//"Time Since Sim Start\tWall ID\tProtein\tSurface Concentration\n";
 			for (int i = 0; i < coatPros.length; i++){
