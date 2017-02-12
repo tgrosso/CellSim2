@@ -264,7 +264,7 @@ public class SimGenerator {
     		System.err.println("Program cannot proceed.");
     		System.exit(1);
 		}
-		System.out.println("Vessel size: " + vesselSize.toString());
+		//System.out.println("Vessel size: " + vesselSize.toString());
 		float channelWidth = vesselSize.x, channelHeight = vesselSize.y, channelDepth = vesselSize.z;
 		float wallThick = 2f;
 		float[] wallColor = {.9f, .6f, .6f};
@@ -313,10 +313,19 @@ public class SimGenerator {
 		position.set((float)((channelWidth+wallThick)/2.0), 0f, 0f);
 		nextWall = new Wall(sim, wallThick, channelHeight, channelDepth, position); 
 		nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
-		nextWall.setVisible(true);
+		nextWall.setVisible(false);
 		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
 		System.out.println("Left: " + nextWall.toString());
+		
+		//right
+		position.set((float)((-channelWidth+wallThick)/2.0), 0f, 0f);
+		nextWall = new Wall(sim, wallThick, channelHeight, channelDepth, position); 
+		nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
+		nextWall.setVisible(false);
+		nextWall.setOutputFile(sim.getWallFile());
+		walls.add(nextWall);
+		System.out.println("Right: " + nextWall.toString());
 		
 		sim.setBaseCameraDistance((float)((channelWidth/2)*(1.05)*Math.tan(Math.PI/3)));
 		
@@ -346,7 +355,7 @@ public class SimGenerator {
 						System.err.println("Wall id is not valid. " + thisGrad[0]);
 						continue;
 					}
-					System.out.println("SG349 - Adding gradient to wall " + thisWall);
+					//System.out.println("SG349 - Adding gradient to wall " + thisWall);
 					//Change the wall in the ArrayList to a gradient wall with this gradient
 					int pro = -1;
 					for (int j = 0; j < proteins.size(); j++){
@@ -360,8 +369,8 @@ public class SimGenerator {
 						System.err.println("Not using");
 						continue;
 					}
-					System.out.println("Protein for gradient: " + pro);
-					System.out.println("Num gradients: " + gradients.size());
+					//System.out.println("Protein for gradient: " + pro);
+					//System.out.println("Num gradients: " + gradients.size());
 					Gradient g = null;
 					for (int j = 0; j < gradients.size(); j++){
 						Gradient n = gradients.get(j);
@@ -381,6 +390,13 @@ public class SimGenerator {
 					newWall.setVisible(true);
 					newWall.setWallColor(0.6f, 0.6f, 1.0f);
 					newWall.setDistFromSource(distFromSource);
+					//if old wall has protein coatings, they need to be transfered
+					int numCoat = oldWall.getNumCoatings();
+					if (numCoat > 0){
+						for (int p = 0; p < numCoat; p++){
+							newWall.coatWithProtein(oldWall.getCoatingProtein(p), oldWall.getCoatingConcentration(p));
+						}
+					}
 					walls.set(thisWall, newWall);
 				}
 			}
@@ -408,7 +424,7 @@ public class SimGenerator {
 					}
 					//Coat this wall with the appropriate protein
 					int pro = -1;
-					System.out.println("SG411 - Adding protein coat to wall " + thisWall);
+					//System.out.println("SG411 - Adding protein coat to wall " + thisWall);
 					for (int j = 0; j < proteins.size(); j++){
 						Protein n = proteins.get(j);
 						if (n.getName().equals(thisCoat[1])){
@@ -436,9 +452,66 @@ public class SimGenerator {
 				}
 			}
 		}
-		
 		for (int i = 0; i < walls.size(); i++){
 			sim.addSimulationObject(walls.get(i));
+		}
+	}
+	
+	public void createCells(Simulation sim){
+		//TODO This could place them more evenly
+		ArrayList<SegmentedCell> cells = new ArrayList<SegmentedCell>();
+		float cellRadius = 5f;
+		int defLev = 1;
+		int numCells = 8;
+		//Get the dimensions of the vessel
+		Vector3f vesselSize = new Vector3f();
+		try{
+			vesselSize = simValues.getValue(vesselSize, "vessel");
+		}catch(SimException e){
+			System.err.println("Programming Error! Variable vessel does not have a default value.");
+    		System.err.println("Program cannot proceed.");
+    		System.exit(1);
+		}
+		//Divide the x,z axis into a grid to fit the cells
+		float gridSize = cellRadius * 2.1f; //Give a little extra space between cells
+		int rows = (int)(vesselSize.z / gridSize);
+		int cols = (int)(vesselSize.x / gridSize);
+		int gridNum = rows * cols;
+		System.out.println("gridSize:  " + gridSize + " rows:" + rows + " cols: " + cols + " gridNum: " + gridNum);
+		
+		if (numCells > gridNum){
+			numCells = gridNum;
+			System.err.println("Maximum number of single layer cells is " + gridNum);
+		}
+		//Determine the y value for the origin of each cell
+		float cellCenterY = -vesselSize.y/2 + cellRadius + 1;
+		//System.out.println("y: " + cellCenterY);
+		//Randomize the grid indexes
+		int[] grid = new int[gridNum];
+		for (int i = 0; i < gridNum; i++){
+			grid[i] = i;
+		}
+		int temp = 0;
+		for (int i = 0; i < gridNum; i++){
+			int nextIndex = (int)(sim.getNextRandomF() * gridNum);
+			//System.out.println(i + "nextIndex: " + nextIndex);
+			temp = grid[nextIndex];
+			grid[nextIndex] = grid[i];
+			grid[i] = temp;
+		}
+		//Add cells into the grid in random order
+		
+		SegmentedCell nextCell;
+		for (int i = 0; i < numCells; i++){
+			int index = grid[i];
+			int row = index / cols;
+			int col = index % cols;
+			float x = vesselSize.x/2 - ((col * gridSize) + (gridSize/2));
+			float y = cellCenterY;
+			float z = vesselSize.z/2 - ((row*gridSize) + (gridSize/2));
+			Vector3f o = new Vector3f(x, y, z);
+			nextCell = new SegmentedCell(sim, o, cellRadius, defLev);
+			//Add proteins and such to the cells
 		}
 	}
 	

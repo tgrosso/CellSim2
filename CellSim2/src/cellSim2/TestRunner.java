@@ -46,6 +46,7 @@ public class TestRunner {
 	private static LinkedHashMap<String, String[]> defaultMap;
 	private static LinkedHashMap<String, String[]> paramMap;
 	private static LinkedHashMap<String, String> proteinMap;
+	private static LinkedHashMap<String, String> cellMap;
 	private static LinkedHashMap<String, String[][]> gradientMap;
 	private static LinkedHashMap<String, String[][]> wallMap;
 	private static LinkedHashMap<String, Integer> dirNames;
@@ -56,6 +57,7 @@ public class TestRunner {
 		defaultMap = new LinkedHashMap<String, String[]>();
 		paramMap = new LinkedHashMap<String, String[]>();
 		proteinMap = new LinkedHashMap<String, String>();
+		cellMap = new LinkedHashMap<String, String>();
 		gradientMap = new LinkedHashMap<String, String[][]>();
 		wallMap = new LinkedHashMap<String, String[][]>();
 	}
@@ -123,6 +125,15 @@ public class TestRunner {
 							continue;
 						}
 						proteinMap.put(value[0], value[1]);
+						continue;
+					}
+					if (var.equals("cell")){
+						if (value.length != 2){
+							System.err.println("Badly formatted cell input");
+							System.err.println("Input was " + line);
+							continue;
+						}
+						cellMap.put(value[0], value[1]);
 						continue;
 					}
 					if (var.equals("gradient")){
@@ -230,6 +241,10 @@ public class TestRunner {
 						continue;
 						//TODO Right now proteins can't be testing values!
 					}
+					if (paramVar[0] == "cell"){
+						continue;
+						//TODO Right now cell changes can't be testing values!
+					}
 					if (paramVar[0] == "gradient"){
 						continue;
 						//TODO Right now gradients can't be testing values!
@@ -281,7 +296,7 @@ public class TestRunner {
 	    	}
 	    	executor.shutdown();
 	    	try{
-				boolean finished = executor.awaitTermination(5, TimeUnit.MINUTES);
+				boolean finished = executor.awaitTermination(60, TimeUnit.MINUTES);
 				if (finished){
 					System.out.println("Threads completed");
 				}

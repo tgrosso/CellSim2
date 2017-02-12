@@ -147,6 +147,7 @@ public class Simulation extends DemoApplication{
 		dynamicsWorld.setGravity(new Vector3f(0f, 0f, 0f));
 		
 		simValues.createWalls(this);
+		simValues.createCells(this);
 
 		if (needGImpact){
 			GImpactCollisionAlgorithm.registerAlgorithm(dispatcher);
@@ -314,6 +315,10 @@ public class Simulation extends DemoApplication{
 	
 	public long getCurrentTimeMicroseconds(){
 		return currentTime;
+	}
+	
+	public void setNeedsGImpact(boolean b){
+		needGImpact = b;
 	}
 	
 	public BufferedWriter getWallFile(){

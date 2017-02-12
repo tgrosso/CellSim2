@@ -98,6 +98,24 @@ public class Wall implements SimObject{
 		return body;
 	}
 	
+	public int getNumCoatings(){
+		return coatConc.length;
+	}
+	
+	public int getCoatingProtein(int i){
+		if (coatPros != null){
+			return coatPros[i];
+		}
+		return -1;
+	}
+	
+	public float getCoatingConcentration(int i){
+		if (coatConc != null){
+			return coatConc[i];
+		}
+		return 0f;
+	}
+	
 	public void coatWithProtein(int proId, float surfaceConc){
 		//System.out.println("I am wall " + id + " and I am being coated with protein " + proId);
 		if (coatPros == null){
@@ -188,7 +206,7 @@ public class Wall implements SimObject{
 		for (int i = 0; i < 4; i++){
 			colorChange[i] = minWallColor[i] - maxWallColor[i];
 		}
-		System.out.println("Wall id " + id + " current color: " + Arrays.toString(wallColor));
+		//System.out.println("Wall id " + id + " current color: " + Arrays.toString(wallColor));
 	}
 	
 	public void setVisibleProtein(int proID){
