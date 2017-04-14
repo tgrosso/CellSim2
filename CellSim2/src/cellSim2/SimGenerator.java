@@ -50,6 +50,7 @@ public class SimGenerator {
 	public float secBetweenOutput;
 	public int secBetweenImages;
 	public boolean displayImages;
+	public int speedUp;
 	
 	public ArrayList<Protein> proteins;
 	public ArrayList<Gradient> gradients;
@@ -73,9 +74,9 @@ public class SimGenerator {
 		//Instantiate all proteins
 		proteins = new ArrayList<Protein>();
 		createProteins();
-		for (int i = 0; i < proteins.size(); i++){
-			proteins.get(i).print(System.out);
-		}
+		//for (int i = 0; i < proteins.size(); i++){
+		//	proteins.get(i).print(System.out);
+		//}
 		
 		gradients = new ArrayList<Gradient>();
 		createGradients();
@@ -122,7 +123,7 @@ public class SimGenerator {
 	}
 	
 	private void createProteins(){
-		System.out.println("Sim Generator: Creating Proteins");
+		//System.out.println("Sim Generator: Creating Proteins");
 		int index = 0;
 		HashMap<String, String> pro = simValues.getProteins();
 		for (Entry<String, String> entry : pro.entrySet()){
@@ -134,7 +135,7 @@ public class SimGenerator {
 	}
 	
 	private void createGradients(){
-		System.out.println("Sim Generator: Creating Gradients");
+		//System.out.println("Sim Generator: Creating Gradients");
 		HashMap<String, ArrayList<String[]>> grad = simValues.getGradients();
 		for (Entry<String, ArrayList<String[]>> entry : grad.entrySet()){
 			String key = entry.getKey();
@@ -155,13 +156,13 @@ public class SimGenerator {
 				System.err.println("Protein " + key + " not in protein list. Gradient not made.");
 				continue;
 			}
-			System.out.println("Gradient of " +  key);
+			//System.out.println("Gradient of " +  key);
 			//Does this gradient exist already?
 			Gradient g = null;
 			for (int i = 0; i < gradients.size(); i++){
 				if (gradients.get(i).getProtein() == proId){
 					g = gradients.get(i);
-					System.out.println("found gradient for " + g.getProtein());
+					//System.out.println("found gradient for " + g.getProtein());
 				}
 			}
 			//Go through each of the value strings
@@ -279,7 +280,7 @@ public class SimGenerator {
 		nextWall.setVisible(true);
 		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
-		System.out.println("Bottom: " + nextWall.toString());
+		//System.out.println("Bottom: " + nextWall.toString());
 		
 		//top
 		position.set(0f, (float)((channelHeight+wallThick)/2.0), 0f);
@@ -288,7 +289,7 @@ public class SimGenerator {
 		nextWall.setVisible(true);
 		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
-		System.out.println("Top: " +nextWall.toString());
+		//System.out.println("Top: " +nextWall.toString());
 		
 		//back
 		position.set(0f, 0f, (float)((channelDepth+wallThick)/2.0));
@@ -297,7 +298,7 @@ public class SimGenerator {
 		nextWall.setVisible(false);
 		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
-		System.out.println("Back: " + nextWall.toString());
+		//System.out.println("Back: " + nextWall.toString());
 		
 		//front
 		position.set(0f, 0f, -(float)((channelDepth+wallThick)/2.0));
@@ -306,7 +307,7 @@ public class SimGenerator {
 		nextWall.setVisible(false);
 		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
-		System.out.println("Front: "+nextWall.toString());
+		//System.out.println("Front: "+nextWall.toString());
 		
 		
 		//left
@@ -316,7 +317,7 @@ public class SimGenerator {
 		nextWall.setVisible(false);
 		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
-		System.out.println("Left: " + nextWall.toString());
+		//System.out.println("Left: " + nextWall.toString());
 		
 		//right
 		position.set((float)((-channelWidth+wallThick)/2.0), 0f, 0f);
@@ -325,7 +326,7 @@ public class SimGenerator {
 		nextWall.setVisible(false);
 		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
-		System.out.println("Right: " + nextWall.toString());
+		//System.out.println("Right: " + nextWall.toString());
 		
 		sim.setBaseCameraDistance((float)((channelWidth/2)*(1.05)*Math.tan(Math.PI/3)));
 		
@@ -459,10 +460,28 @@ public class SimGenerator {
 	
 	public void createCells(Simulation sim){
 		//TODO This could place them more evenly
+		//Read in all of the cell files
+		//System.out.println("Sim Generator: Creating Cells");
+		
 		ArrayList<SegmentedCell> cells = new ArrayList<SegmentedCell>();
-		float cellRadius = 5f;
-		int defLev = 1;
-		int numCells = 8;
+		int index = 0;
+		HashMap<String, String> cellFiles = simValues.getCells();
+		for (Entry<String, String> entry : cellFiles.entrySet()){
+			String key = entry.getKey();
+			cells.addAll(SegmentedCell.readInFile(key, entry.getValue(), sim));
+			index++;
+			//System.out.println("Cell: " + key);
+		}
+		
+		float maxRadius = 1f;
+		for (int i = 0; i < cells.size(); i++){
+			SegmentedCell c = cells.get(i);
+			if (c.getRadius() > maxRadius){
+				maxRadius = c.getRadius();
+			}
+		}
+		int numCells = cells.size();
+		//System.out.println("MaxRadius: " + maxRadius);
 		//Get the dimensions of the vessel
 		Vector3f vesselSize = new Vector3f();
 		try{
@@ -472,19 +491,31 @@ public class SimGenerator {
     		System.err.println("Program cannot proceed.");
     		System.exit(1);
 		}
+		//System.out.println("Vessel Size: " + vesselSize.toString());
 		//Divide the x,z axis into a grid to fit the cells
-		float gridSize = cellRadius * 2.1f; //Give a little extra space between cells
+		float gridSize = maxRadius * 2.1f; //Give a little extra space between cells
 		int rows = (int)(vesselSize.z / gridSize);
 		int cols = (int)(vesselSize.x / gridSize);
 		int gridNum = rows * cols;
-		System.out.println("gridSize:  " + gridSize + " rows:" + rows + " cols: " + cols + " gridNum: " + gridNum);
+		//System.out.println("gridSize:  " + gridSize + " rows:" + rows + " cols: " + cols + " gridNum: " + gridNum);
 		
 		if (numCells > gridNum){
 			numCells = gridNum;
 			System.err.println("Maximum number of single layer cells is " + gridNum);
 		}
 		//Determine the y value for the origin of each cell
-		float cellCenterY = -vesselSize.y/2 + cellRadius + 1;
+		float cellCenterY = -vesselSize.y/2 + maxRadius + 1;
+		System.out.println("Num cells: " + numCells);
+		System.out.println("maxRadius: " + maxRadius);
+		
+		//if there is only one cell. put it right in the middle - it's a testing issue
+		if (numCells == 1){
+			SegmentedCell c = cells.get(0);
+			//sim.removeSimulationObject(c);
+			c.setInitialPosition(new Vector3f(0, cellCenterY, 0));
+			//sim.addSimulationObject(c);
+			return;
+		}
 		//System.out.println("y: " + cellCenterY);
 		//Randomize the grid indexes
 		int[] grid = new int[gridNum];
@@ -501,17 +532,15 @@ public class SimGenerator {
 		}
 		//Add cells into the grid in random order
 		
-		SegmentedCell nextCell;
 		for (int i = 0; i < numCells; i++){
-			int index = grid[i];
-			int row = index / cols;
-			int col = index % cols;
-			float x = vesselSize.x/2 - ((col * gridSize) + (gridSize/2));
-			float y = cellCenterY;
-			float z = vesselSize.z/2 - ((row*gridSize) + (gridSize/2));
-			Vector3f o = new Vector3f(x, y, z);
-			nextCell = new SegmentedCell(sim, o, cellRadius, defLev);
-			//Add proteins and such to the cells
+			int g_row = grid[i] / cols;
+			int g_col = grid[i] % cols;
+			float x = (vesselSize.x/2)-(gridSize / 2) - (g_col * gridSize);
+			float z = (vesselSize.z/2)-(gridSize / 2) - (g_row * gridSize);
+			SegmentedCell c = cells.get(i);
+			//sim.removeSimulationObject(c);
+			c.setInitialPosition(new Vector3f(x, cellCenterY, z));
+			//sim.addSimulationObject(c);
 		}
 	}
 	
@@ -528,7 +557,7 @@ public class SimGenerator {
 	}
 	
 	public static void main(String[] args) {
-		System.out.println("Sim Generator Is Running\n");
+		//System.out.println("Sim Generator Is Running\n");
 		SimGenerator sg = new SimGenerator(new File(args[0]), new File(args[1]));
 		boolean showScreen = true;
 		int screenwidth = 800;

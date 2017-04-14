@@ -40,8 +40,6 @@ public class Defaults {
 		defaults.put("screenWidth", new String[]{"700"});
 		defaults.put("screenHeight", new String[]{"500"});
 		defaults.put("endTime", new String[]{"30"});
-		defaults.put("numCells", new String[]{"5"});
-		defaults.put("cellDetailLevel", new String[]{"1"});
 		defaults.put("displayImages", new String[]{"true"});
 		defaults.put("vessel", new String[]{"300", "90", "100"});
 		defaults.put("vesselColor", new String[]{"0", "0", ".8"});
@@ -57,7 +55,9 @@ public class Defaults {
 		cellDefaults.put("Name", "Unnamed Cell Type");
 		cellDefaults.put("numCells", "5");
 		cellDefaults.put("cellDetailLevel", "1");
-		cellDefaults.put("radius", "20");
+		cellDefaults.put("radius", "10");
+		cellDefaults.put("density", "1.01");
+		cellDefaults.put("maxDeltaVel", "1");
 	}
 	
 	private static final HashMap<String, String> proteinDefaults = new HashMap<String, String>();
@@ -71,6 +71,7 @@ public class Defaults {
 	
 	private HashMap<String, String[]> currentVals;
 	private HashMap<String, String> proteins;
+	private HashMap<String, String> cells;
 	private HashMap<String, ArrayList<String[]>> gradients;
 	private HashMap<String, ArrayList<String[]>> walls;
 	
@@ -79,6 +80,7 @@ public class Defaults {
 		proteins = new HashMap<String, String>();
 		gradients = new HashMap<String, ArrayList<String[]>>();
 		walls = new HashMap<String, ArrayList<String[]>>();
+		cells = new HashMap<String, String>();
 	}
 	
 	public void readInputFile(File input) throws IOException{
@@ -111,6 +113,15 @@ public class Defaults {
 						continue;
 					}
 					proteins.put(value[0], value[1]);
+					continue;
+				}
+				if (var.equals("cell")){
+					if (value.length != 2){
+						System.err.println("Badly formatted input. Cell does not have enough arguments");
+						System.err.println("Correct format: cell<tab>Name<tab>SourceFile");
+						continue;
+					}
+					cells.put(value[0], value[1]);
 					continue;
 				}
 				if (var.equals("gradient")){
@@ -171,10 +182,16 @@ public class Defaults {
 		}
 		
 		//print out proteins and gradients hashmaps
+		/*
 		System.out.println("This is what defaults has entered:");
+		System.out.println("CELLS");
+		for (String name: cells.keySet()){
+            String key =name.toString();
+            String value = cells.get(name).toString();  
+            System.out.println(key + " " + value);  
+         }
 		System.out.println("PROTEINS");
 		for (String name: proteins.keySet()){
-
             String key =name.toString();
             String value = proteins.get(name).toString();  
             System.out.println(key + " " + value);  
@@ -201,10 +218,11 @@ public class Defaults {
 	            	System.out.println("");
 	            }
 	      }
+	     */
 		br.close();
 		isr.close();
 		fis.close();
-		System.out.println("Defaults has read in the file.\n");
+		//System.out.println("Defaults has read in the file.\n");
 	}
 	
 	public static boolean variableExists(String key){
@@ -214,6 +232,9 @@ public class Defaults {
 	public static boolean variableExists(String type, String key){
 		if (type.equals("Protein")){
 			return proteinDefaults.containsKey(key);
+		}
+		if (type.equals("Cell")){
+			return cellDefaults.containsKey(key);
 		}
 		return false;
 	}
@@ -250,6 +271,9 @@ public class Defaults {
 		if (type == "Protein"){
 			return proteinDefaults.get(key);
 		}
+		if (type == "Cell"){
+			return cellDefaults.get(key);
+		}
 		else{
 			System.err.println("This value does not exist for " + type);
 			return("");
@@ -258,6 +282,10 @@ public class Defaults {
 	
 	public HashMap<String, String> getProteins(){
 		return proteins;
+	}
+	
+	public HashMap<String, String> getCells(){
+		return cells;
 	}
 	
 	public HashMap<String, ArrayList<String[]>> getGradients(){

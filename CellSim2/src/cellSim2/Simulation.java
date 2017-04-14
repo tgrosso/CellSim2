@@ -71,7 +71,9 @@ public class Simulation extends DemoApplication{
 	private ImageGenerator imageGen;
 	private boolean render = true, finished = false;
 	private SimGenerator simValues;
-	private long currentTime, startTime, clockTime, lastDataOutput;
+	private long oldTime, currentTime, startTime, clockTime, lastDataOutput, deltaTime;
+	private float averageDeltaTime;
+	private long numFrames;
 	
 	private Random random;
 	
@@ -86,10 +88,14 @@ public class Simulation extends DemoApplication{
 		modelObjects = new ObjectArrayList<SimObject>();
 		//startTime is the underlying clock time. clockTime - startTime = currentTime
 		startTime = clock.getTimeMicroseconds();
+		oldTime = startTime;
 		clockTime = startTime;
 		//current time is microseconds since start of simulation
 		currentTime = clockTime - startTime;
+		deltaTime = 0L;
 		lastDataOutput = -1;
+		averageDeltaTime = 0f;
+		numFrames = 0;
 		
 		//TODO ImageGenerator is just a stub right now
 		imageGen = new ImageGenerator();
@@ -102,7 +108,7 @@ public class Simulation extends DemoApplication{
 		try{
 			logFile = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "logFile.csv")));
 			cellData = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "cellData.csv")));
-			cellData.write(Cell.getDataHeaders());
+			cellData.write(SegmentedCell.getDataHeaders());
 			wallData = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "wallData.csv")));
 			wallData.write(Wall.getDataHeaders());
 			for (int i = 0; i < simValues.gradients.size(); i++){
@@ -148,6 +154,16 @@ public class Simulation extends DemoApplication{
 		
 		simValues.createWalls(this);
 		simValues.createCells(this);
+		/*
+		Wall w0 = new Wall(this, 150, 10, 100, new Vector3f(0, 0, 0));
+		w0.setWallColor(1.0f, 0.0f, 0.0f);
+		System.out.println(w0.getMass());
+		modelObjects.add(w0);
+		SegmentedCell c0 = new SegmentedCell(this, new Vector3f(0, 30, 0), 10, 1);
+		c0.setDensity(1f);
+		modelObjects.add(c0);
+		System.out.println("cell mass: " + c0.getMass());
+		*/
 
 		if (needGImpact){
 			GImpactCollisionAlgorithm.registerAlgorithm(dispatcher);
@@ -185,10 +201,14 @@ public class Simulation extends DemoApplication{
 		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		// simple dynamics world doesn't handle fixed-time-stepping
-		long oldTime = clockTime;
+		//long oldTime = clockTime;
 		clockTime = clock.getTimeMicroseconds();
-		long deltaTime = clockTime - oldTime;
-		currentTime = clockTime - startTime;
+		long newTime = clockTime * simValues.speedUp;
+		deltaTime = newTime - oldTime;
+		currentTime = newTime - startTime;
+		oldTime = newTime;
+		//numFrames++;
+		//averageDeltaTime = (averageDeltaTime * (numFrames-1) + deltaTime) / numFrames;
 
 		// step the simulation
 		if (dynamicsWorld != null) {
@@ -317,12 +337,21 @@ public class Simulation extends DemoApplication{
 		return currentTime;
 	}
 	
+	@Override
+	public float getDeltaTimeMicroseconds(){
+		return (float)deltaTime;
+	}
+	
 	public void setNeedsGImpact(boolean b){
 		needGImpact = b;
 	}
 	
 	public BufferedWriter getWallFile(){
 		return wallData;
+	}
+	
+	public BufferedWriter getCellFile(){
+		return cellData;
 	}
 	
 	public String getFormattedTime(){
@@ -373,8 +402,15 @@ public class Simulation extends DemoApplication{
 	
 	
 	public void wrapUp(){
-		writeToLog("current time (microseconds)" + currentTime);
-		writeToLog("\n" + getFormattedTime() + "\tFinishing Up");
+		writeToLog("\n" + getFormattedTime() + ",Finishing Up");
+		writeToLog("Current time (microseconds)," + currentTime);
+		writeToLog("Actual clock time (microseconds)," + clock.getTimeMicroseconds());
+		writeToLog("Average frame time (microseconds), " + averageDeltaTime);
+		int numObjects = modelObjects.size();
+		for (int i = 0; i < numObjects; i++){
+			SimObject bioObj = modelObjects.getQuick(i);
+			writeToLog(bioObj.finalOutput());
+		}
 		
 		try{
 			logFile.flush();

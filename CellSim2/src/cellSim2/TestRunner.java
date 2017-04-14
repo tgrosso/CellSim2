@@ -232,6 +232,7 @@ public class TestRunner {
 			while ((line = br.readLine()) != null) {
 				if (line.length() > 0 && !line.contains("\\\\")){
 					String[] paramVar = line.split("\t");
+					//System.out.println("paramVar[0]: " + paramVar[0]);
 					if (paramVar.length < 2){
 						System.err.println("Badly formatted input. parameter<tab>value_1<tab>value_2<tab>...");
 						System.err.println("Input was: " + line);
@@ -241,9 +242,19 @@ public class TestRunner {
 						continue;
 						//TODO Right now proteins can't be testing values!
 					}
-					if (paramVar[0] == "cell"){
+					if (paramVar[0].equals("cell")){
+						//The first param value will be cell type
+						//All remaining will be files describing the different versions
+						//So no problem add it to the list, it's an issue of reading
+						String param = paramVar[0] + "\t" + paramVar[1]; //i.e. cell<tab>cellType
+						String[] values = Arrays.copyOfRange(paramVar,  2,  paramVar.length);
+						//System.out.println("Reading in cell parameters: ");
+						//System.out.println("param: " + param);
+						//for (int k = 0; k < values.length; k++){
+						//	System.out.println("\t" + values[k]);
+						//}
+						paramMap.put(param,  values);
 						continue;
-						//TODO Right now cell changes can't be testing values!
 					}
 					if (paramVar[0] == "gradient"){
 						continue;
@@ -328,6 +339,16 @@ public class TestRunner {
 				//TODO Unit test - value_ids should not be null here
 				//System.out.print(params[i] + ": " + val + " ");
 				String var = params[i];
+				if (params[i].startsWith("cell")){
+					//The value will be a Filename. Need the end of that filename
+					File f = new File(val);
+					val = f.getName();
+					//Find the index of a . if one exists
+					int dot = val.lastIndexOf('.');
+					if (dot >=0){
+						val = val.substring(0,  dot);
+					}
+				}
 				if (var.length()>=4){
 					var = var.substring(0, 4);
 				}
@@ -379,6 +400,14 @@ public class TestRunner {
 				        String val = e.getValue();
 				        pw.println("protein\t" + var + "\t" + val);
 				   
+				    }
+					//Now the cells
+					for(Entry<String, String> e : cellMap.entrySet()) {
+				        String var = e.getKey();
+				        String val = e.getValue();
+				        if (!paramMap.containsKey("cell\t" + var)){
+				        	pw.println("cell\t" + var + "\t" + val);
+				        }
 				    }
 					//Now the gradients
 					for(Entry<String, String[][]> e : gradientMap.entrySet()) {

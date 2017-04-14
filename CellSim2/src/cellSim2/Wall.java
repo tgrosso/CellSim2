@@ -171,7 +171,7 @@ public class Wall implements SimObject{
 						float color = maxWallColor[j] + percentChange * colorChange[j];
 						setColor(color, j);
 					}
-					sim.writeToLog("Wall id " + id + " concentration," + coatConc[i] + ",color " + Arrays.toString(wallColor) );
+					//sim.writeToLog("Wall id " + id + " concentration," + coatConc[i] + ",color " + Arrays.toString(wallColor) );
 				}
 			}
 			lastProteinUpdate = sim.getCurrentTimeMicroseconds();
@@ -349,9 +349,9 @@ public class Wall implements SimObject{
 		finalWritten = true;
 		if (outputFile != null && coatPros != null && coatPros.length > 0){
 			//"Time Since Sim Start\tWall ID\tProtein\tSurface Concentration\n";
-			String s = "";
+			String s = "Wall," + getID() + "\n";
 			for (int i = 0; i < coatPros.length; i++){
-				s = s +sim.getFormattedTime() + "\t" + getID() + "\t" + sim.getProteinName(i) + "\t" + coatConc[i] + "\n";
+				s = s + sim.getProteinName(i) + "," + coatConc[i] + "\n";
 			}
 			return s;
 		}
