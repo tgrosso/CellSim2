@@ -349,14 +349,14 @@ public class Wall implements SimObject{
 		finalWritten = true;
 		if (outputFile != null && coatPros != null && coatPros.length > 0){
 			//"Time Since Sim Start\tWall ID\tProtein\tSurface Concentration\n";
-			String s = "Wall," + getID() + "\n";
+			String s = "Wall - ID" + getID() + "\n";
 			for (int i = 0; i < coatPros.length; i++){
-				s = s + sim.getProteinName(i) + "," + coatConc[i] + "\n";
+				s = s + "\t" + sim.getProteinName(i) + "\t" + coatConc[i] + "\n";
 			}
 			return s;
 		}
 		else{
-			return "";
+			return "Wall ID " + getID() + "\t No proteins\n";
 		}
 	}
 	

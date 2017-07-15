@@ -74,6 +74,7 @@ public class Defaults {
 	private HashMap<String, String> cells;
 	private HashMap<String, ArrayList<String[]>> gradients;
 	private HashMap<String, ArrayList<String[]>> walls;
+	private ArrayList<String[]> proteinPairs;
 	
 	public Defaults(){
 		currentVals = new HashMap<String, String[]>();
@@ -81,6 +82,7 @@ public class Defaults {
 		gradients = new HashMap<String, ArrayList<String[]>>();
 		walls = new HashMap<String, ArrayList<String[]>>();
 		cells = new HashMap<String, String>();
+		proteinPairs = new ArrayList<String[]>();
 	}
 	
 	public void readInputFile(File input) throws IOException{
@@ -171,6 +173,29 @@ public class Defaults {
 					else{
 						walls.get(k).add(info);
 					}
+					continue;
+				}
+				if (var.equals("proteinPair")){
+					if (value.length < 4){
+						System.err.println("Badly formatted input. proteinPair does not have enough arguments");
+						System.err.println("Correct format: proteinPair<tab>ligand<tab>receptor<tab>forward rate<tab>reverse rate");
+						System.err.println("optionally: <tab>max bond length<tab>bond lifetime");
+						System.err.println("Or - define a target");
+						continue;
+					}
+					String lig = value[0];
+					String rec = value[1];
+					if (!proteins.containsKey(lig)){
+						System.err.println("Bad input. proteinPair ligand is not a defined protein");
+						System.err.println("Ligand entered: " + lig);
+						continue;
+					}
+					if (!proteins.containsKey(rec)){
+						System.err.println("Bad input. proteinPair receptor is not a defined protein");
+						System.err.println("Ligand entered: " + rec);
+						continue;
+					}
+					proteinPairs.add(value);
 					continue;
 				}
 				if (!Defaults.variableExists(var)){

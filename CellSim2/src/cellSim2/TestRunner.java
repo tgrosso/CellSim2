@@ -50,6 +50,7 @@ public class TestRunner {
 	private static LinkedHashMap<String, String[][]> gradientMap;
 	private static LinkedHashMap<String, String[][]> wallMap;
 	private static LinkedHashMap<String, Integer> dirNames;
+	private static ArrayList<String[]> proteinPairs;
 	private static ArrayList<GeneratorThread> generators;
 	static{
 		dirNames = new LinkedHashMap<String, Integer>();
@@ -60,6 +61,7 @@ public class TestRunner {
 		cellMap = new LinkedHashMap<String, String>();
 		gradientMap = new LinkedHashMap<String, String[][]>();
 		wallMap = new LinkedHashMap<String, String[][]>();
+		proteinPairs = new ArrayList<String[]>();
 	}
 
 	/**
@@ -184,6 +186,16 @@ public class TestRunner {
 						}
 						continue;
 					}
+					if (var.equals("proteinPair")){
+						if (value.length != 4 && value.length != 6){
+							System.err.println("Badly formatted proteinPair input");
+							System.err.println("Input was " + line);
+							continue;
+						}
+						proteinPairs.add(value);
+						//System.out.println("TestRunner Protein Pair");
+						continue;
+					}
 					if (!Defaults.variableExists(var)){
 						System.err.println("TestRunner reading Defaults: Varible " + var + " does not exist.");
 						continue;
@@ -263,6 +275,10 @@ public class TestRunner {
 					if (paramVar[0] == "wall"){
 						continue;
 						//TODO Right now wall changes can't be testing values!
+					}
+					if (paramVar[0] == "proteinPair"){
+						continue;
+						//TODO Right now proteinPairs  can't be testing values!
 					}
 					if (!Defaults.variableExists(paramVar[0])){
 						System.err.println("TestRunner Reading Params: Varible " + paramVar[0] + " does not exist.");
@@ -427,6 +443,11 @@ public class TestRunner {
 							pw.println("wall\t" + var + "\t" + valString);
 						}
 				    }
+					//Now the proteinPairs
+					for(int i = 0; i < proteinPairs.size(); i++){
+						String valString = String.join("\t", Arrays.asList(proteinPairs.get(i)));
+						pw.println("proteinPair\t" + valString);
+					}
 					
 					pw.close();
 				}

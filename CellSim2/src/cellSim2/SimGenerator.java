@@ -132,6 +132,10 @@ public class SimGenerator {
 			index++;
 			//System.out.println("Protein: " + key);
 		}
+		for (int i = 0; i < proteins.size(); i++){
+			Protein p = proteins.get(i);
+			p.setLigands(this);
+		}
 	}
 	
 	private void createGradients(){
@@ -550,6 +554,17 @@ public class SimGenerator {
 	
 	public String getProteinName(int id){
 		return proteins.get(id).getName();
+	}
+	
+	public int getProteinId(String s){
+		for (int i = 0; i < proteins.size(); i++){
+			Protein p = proteins.get(i);
+			if (p.getName().compareTo(s)==0){
+				return p.getId();
+			}
+		}
+		//If we are here, the protein doesn't exist in the simulation
+		return (-1);
 	}
 	
 	public File getOutputDir(){

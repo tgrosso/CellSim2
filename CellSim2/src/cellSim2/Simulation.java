@@ -130,7 +130,7 @@ public class Simulation extends DemoApplication{
 		catch (IOException e){
 			System.err.println("Cannot generate output files!");
 		}
-		writeToLog(getFormattedTime() + "\tIntialization Complete");
+		writeToLog(getFormattedTime() + "\tInitialization Complete");
 	}
 	
 	@Override
@@ -207,8 +207,8 @@ public class Simulation extends DemoApplication{
 		deltaTime = newTime - oldTime;
 		currentTime = newTime - startTime;
 		oldTime = newTime;
-		//numFrames++;
-		//averageDeltaTime = (averageDeltaTime * (numFrames-1) + deltaTime) / numFrames;
+		numFrames++;
+		averageDeltaTime = (averageDeltaTime * (numFrames-1) + deltaTime) / numFrames;
 
 		// step the simulation
 		if (dynamicsWorld != null) {

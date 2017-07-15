@@ -350,7 +350,7 @@ public class SegmentedCell implements SimObject{
 	}
 	
 	public static String getDataHeaders(){
-		String s = "Time Since Sim Start\tCell Type\tCell ID\txPos\tyPos\tzPos\n";
+		String s = "Time Since Sim Start\tCell Type\tCell ID\txPos\tyPos\tzPos\tRel xPos\tRel yPos\tRel zPos\n";
 		return s;
 	}
 	
@@ -361,8 +361,8 @@ public class SegmentedCell implements SimObject{
 		finalWritten = true;
 		Vector3f euclidDist = new Vector3f();
 		euclidDist.sub(lastPosition, initialPosition);
-		String s = "Segmented Cell (" + cellType + "): " + myId + "\n";
-		s += ",Accumulated Distance," + accumulatedDistance + ",Euclidean Distance," + euclidDist.length(); 
+		String s = "Segmented Cell (" + cellType + " id:" + myId + ")\n";
+		s += "\t\tAccumulated Distance\t" + accumulatedDistance + "\tEuclidean Distance," + euclidDist.length(); 
 		return s;
 	}
 	
@@ -378,7 +378,7 @@ public class SegmentedCell implements SimObject{
 		//also should write segment data
 		if (outputFile != null){
 			try{
-				outputFile.write(sim.getFormattedTime() + "\t" + cellType + "\t" + myId + "\t" + lastPosition.x + "\t" + lastPosition.y + "\t" + lastPosition.z +"\n");
+				outputFile.write(sim.getFormattedTime() + "\t" + cellType + "\t" + myId + "\t" + lastPosition.x + "\t" + lastPosition.y + "\t" + lastPosition.z + "\t" + (lastPosition.x-initialPosition.x)+ "\t" + (lastPosition.y-initialPosition.y)+ "\t" + (lastPosition.z-initialPosition.z)+"\n");
 			}
 			catch(IOException e){
 				sim.writeToLog(sim.getFormattedTime() + "\t" + "Unable to write to cell file" + "\t" + e.toString());

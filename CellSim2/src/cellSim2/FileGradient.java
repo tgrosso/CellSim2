@@ -76,7 +76,7 @@ public class FileGradient implements Gradient{
 		source = new File(filename);
 		//Try to initialize distances from file and determine minimum and maximum concentrations
 		try {
-			System.out.println("Initializing File Gradient (about line 79");
+			//System.out.println("Initializing File Gradient (about line 79");
 			String line = "";
             br = new BufferedReader(new FileReader(source));
             
