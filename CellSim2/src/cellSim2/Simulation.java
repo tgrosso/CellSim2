@@ -63,7 +63,7 @@ public class Simulation extends DemoApplication{
 	private ConstraintSolver solver;
 	
 	private ObjectArrayList<SimObject> modelObjects;
-	//private ObjectArrayList<Gradient> gradients;
+	private ObjectArrayList<Gradient> gradients;
 
 	private float baseCameraDistance = 150;
 	private boolean needGImpact = false;
@@ -216,6 +216,8 @@ public class Simulation extends DemoApplication{
 			// optional but useful: debug drawing
 			dynamicsWorld.debugDrawWorld();
 		}
+		
+		//Check for collisions and do stuff
 
 		if (simValues.displayImages){
 			renderme();

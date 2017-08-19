@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 /**
  * @author Terri Applewhite-Grosso
@@ -48,6 +49,7 @@ public class SegmentedCell implements SimObject{
 	private boolean bound = false;
 	private boolean finalWritten = false;
 	private String cellType = "Unnamed Type";
+	private HashMap<Integer, TraffickingInfo> traffickRates;
 	
 	private BufferedWriter outputFile;
 	
@@ -65,6 +67,7 @@ public class SegmentedCell implements SimObject{
 	protected Transform trans;
 	private Simulation sim;
 	
+	private float surfaceArea;
 	private float[] triangleAreas;
 	
 
@@ -84,6 +87,7 @@ public class SegmentedCell implements SimObject{
 		volume = (float)(4.0/3.0 * Math.PI * radius * radius * radius);
 		mass = density * volume;
 		detailLevel = dl;
+		surfaceArea = (float)(4 * Math.PI * r * r);
 		//maxAngVel = (float)(Math.PI/Math.pow(2, detailLevel));
 		//maxDeltaVel = (float)(Math.PI * 1800 * mass);
 		//System.out.println("Max Delta Vel: " + maxDeltaVel);
@@ -106,6 +110,12 @@ public class SegmentedCell implements SimObject{
 		float downForce = (mass * 9.8f) - (volume * 9.8f);
 		body.setGravity(new Vector3f(0, -downForce, 0));
 		//body.setAngularVelocity(getRandomVector(maxDeltaVel));
+		
+		traffickRates = new HashMap<Integer, TraffickingInfo>();
+		triangleAreas = new float[numSegments];
+		for (int i = 0; i < numSegments; i++){
+			triangleAreas[i] = surfaceArea / numSegments;
+		}
 		
 		sim.setNeedsGImpact(true);
 		sim.addSimulationObject(this);
@@ -288,6 +298,23 @@ public class SegmentedCell implements SimObject{
 	
 	public void setMaxDeltaVel(float m){
 		maxDeltaVel = m;
+	}
+	
+	public boolean hasTraffickInfoForProtein(int id){
+		Integer i = new Integer(id);
+		return traffickRates.containsKey(i);
+	}
+	
+	public TraffickingInfo getTraffickInfo(int pro, int id){
+		Integer i = new Integer(pro);
+		if (traffickRates.containsKey(i)){
+			TraffickingInfo ti = traffickRates.get(i);
+			long sec = (long)(ti.getSecretionRate() * triangleAreas[id]/surfaceArea);
+			return new TraffickingInfo(sec, ti.getUnboundIntRate(), ti.getBoundIntRate());
+		}
+		else{
+			return new TraffickingInfo();
+		}
 	}
 	
 	public Vector3f getColor3Vector(){

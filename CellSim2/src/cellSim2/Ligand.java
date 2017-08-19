@@ -16,47 +16,57 @@
 package cellSim2;
 
 import java.util.ArrayList;
+import javax.vecmath.Vector3f;
 
 /**
  * @author Terri Applewhite-Grosso
  *
  */
-public class ProteinPair {
+public class Ligand {
 
 	/**
 	 * This class describes the interactions between a ligand and a receptor
-	 * A list of these Pairs is maintained in the Generator
+	 * An array of these ligands is maintained for each receptor in the generator 
 	 */
 	
-	Protein ligand;
-	Protein receptor;
-	float forwardBindingRate = 0f;
-	float reverseBindingRate = 0f;
-	boolean formsBonds = false;
-	float bondLength = 0f;
-	float bondLife = 0f;
+	private Protein ligand;
+	private float forwardBindingRate = 0f;
+	private float reverseBindingRate = 0f;
+	private boolean formsStructBonds = false;
+	private float bondLength = 0f;
+	private float bondLife = 0f;
+	private boolean hasGradient = false;
+	private Gradient grad = null;
 	//public ArrayList<Protein> targets;
 	//Might use a different internal class to define targets
+	//Does TraffickingInfo go here? 
 	
-	public ProteinPair(Protein li, Protein re, float forward, float reverse) {
+	public Ligand(Protein li, float forward, float reverse) {
 		ligand = li;
-		receptor = re;
 		forwardBindingRate = forward;
 		reverseBindingRate = reverse;
 	}
 	
-	public void makeBond(float length, float life){
-		formsBonds = true;
+	public void addGradient(Gradient g){
+		grad = g;
+		hasGradient = true;
+	}
+	
+	public float getConcentration(long time, Vector3f position){
+		if (hasGradient){
+			return grad.getConcentration(time, position);
+		}
+		return 0f;
+	}
+	
+	public void setBondInfo(float length, float life){
+		formsStructBonds = true;
 		bondLength = length;
 		bondLife = life;
 	}
 	
 	public Protein getLigand(){
 		return ligand;
-	}
-	
-	public Protein getReceptor(){
-		return receptor;
 	}
 	
 	public float getForwardRate(){
@@ -68,7 +78,7 @@ public class ProteinPair {
 	}
 	
 	public boolean formsStructuralBonds(){
-		return formsBonds;
+		return formsStructBonds;
 	}
 	
 	public float getMaxBondLife(){

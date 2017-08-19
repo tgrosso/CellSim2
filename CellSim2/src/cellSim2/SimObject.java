@@ -50,5 +50,6 @@ public interface SimObject {
 		public void wrapup();
 		public void setOutputFile(BufferedWriter bw);
 		public void writeOutput();
+		public TraffickingInfo getTraffickInfo(int protein, int id);
 
 }

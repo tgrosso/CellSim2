@@ -38,6 +38,17 @@ import org.lwjgl.LWJGLException;
 
 
 public class SimGenerator {
+	public static float[][]colorList = new float[][]{
+		  { 1.0f, 0.0f, 0.0f },//red
+		  { 0.0f, 1.0f, 0.0f },//green
+		  { 0.3f, 0.0f, 0.5f},//indigo
+		  { 1.0f, 0.5f, 0.0f},//orange
+		  { 0.0f, 1.0f, 1.0f}, //cyan
+		  { 1.0f, 0.5f, 1.0f}, //violet
+		  { 1.0f, 1.0f, 0.0f}, //yellow
+		  { 0.0f, 0.0f, 1.0f}, //blue
+		};
+	
 	private File inputFile;
 	private File outputDir;
 	private Defaults simValues;
@@ -54,6 +65,7 @@ public class SimGenerator {
 	
 	public ArrayList<Protein> proteins;
 	public ArrayList<Gradient> gradients;
+	public ArrayList<Ligand> proteinPairs;
 	
 	public ImageGenerator imageGen;
 	
@@ -80,6 +92,7 @@ public class SimGenerator {
 		
 		gradients = new ArrayList<Gradient>();
 		createGradients();
+		
 		
 	}
 	
@@ -167,6 +180,7 @@ public class SimGenerator {
 				if (gradients.get(i).getProtein() == proId){
 					g = gradients.get(i);
 					//System.out.println("found gradient for " + g.getProtein());
+					break;
 				}
 			}
 			//Go through each of the value strings
@@ -180,7 +194,7 @@ public class SimGenerator {
 					//only valid parameters are "zero" or "file"
 					if (param.equalsIgnoreCase("file")){
 						//System.out.println("SG175 param: " + param);
-						g = new FileGradient(proId, line[1]);
+						g = new FileGradient(proId, line[1], colorList[proId%colorList.length]);
 						FileGradient test = (FileGradient)g;
 						if (!test.successfullyMade()){
 							System.err.println("FileGradient " + key + " not successful.");
@@ -190,6 +204,7 @@ public class SimGenerator {
 					}
 					else if (param.compareToIgnoreCase("zero")==0){
 						g = new ZeroGradient(proId, Float.parseFloat(line[1]));
+						g.setBaseColor(colorList[proId % colorList.length]);
 					}
 					else{
 						System.err.println("Must create gradient before setting parameters");
@@ -201,27 +216,6 @@ public class SimGenerator {
 				}
 				//g is not null
 				switch(param){
-					case "Color":
-					case "color":
-						if (line.length < 4){
-							System.err.println("Color must have three float entries. Value only has " + (line.length -1));
-							break;
-						}
-						String[] colText = Arrays.copyOfRange(line, 1, 4);
-						//System.out.println("colText length: " + colText.length);
-						float[] col = new float[3];
-						for (int j = 0; j < 3; j++){
-							try{
-								col[j] = Float.parseFloat(colText[j]);
-								//System.out.println(col[j]);
-							}catch(NumberFormatException e){
-								System.err.println("Color values must be floats. " + colText[i] + " is not valid.");
-								break;
-							}
-						}
-						//System.out.println("Num cols: " + col.length);
-						g.setBaseColor(col[0], col[1], col[2]);
-						break;	
 					case "Concentration":
 					case "concentration":
 						float c = -1f;
@@ -569,6 +563,18 @@ public class SimGenerator {
 	
 	public File getOutputDir(){
 		return outputDir;
+	}
+	
+	public Gradient getGradient(int proId){
+		//This really should be a hash map!!
+		Gradient grad = null;
+		for (int i = 0; i < gradients.size(); i++){
+			grad = gradients.get(i);
+			if (grad.getProtein() == proId){
+				return grad;
+			}
+		}
+		return grad;
 	}
 	
 	public static void main(String[] args) {

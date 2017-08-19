@@ -31,6 +31,7 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.FloatBuffer;
 import java.util.Arrays;
+import java.util.HashMap;
 
 import javax.vecmath.Vector3f;
 
@@ -48,6 +49,7 @@ public class Wall implements SimObject{
 	protected float[] wallColor = {0.2f, 0.2f, 0.2f, 1f};
 	//protected float width, height, depth;
 	protected static FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
+
 	protected boolean visible = true;
 	protected boolean toRemove = false;
 	protected int id;
@@ -114,6 +116,11 @@ public class Wall implements SimObject{
 			return coatConc[i];
 		}
 		return 0f;
+	}
+	
+	public TraffickingInfo getTraffickInfo(int pro, int id){
+		//Walls don't traffick. Return zero values
+		return new TraffickingInfo();
 	}
 	
 	public void coatWithProtein(int proId, float surfaceConc){

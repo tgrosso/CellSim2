@@ -33,7 +33,7 @@ public interface Gradient {
 	public float getMaxConcentration();
 	public float getMinConcentration();
 	public void setAxis(int a);
-	public void setBaseColor(float r, float g, float b);
+	public void setBaseColor(float[] c);
 	public void setMaxConcentration(float c);
 	public void setMinConcentration(float c);
 	public void print(PrintStream p);

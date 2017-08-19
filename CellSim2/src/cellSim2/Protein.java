@@ -45,6 +45,7 @@ public class Protein {
 	private float[] reverseRates;
 	private float[] bondLengths;
 	private float[] bondLifetimes;
+	private float[] color;
 
 	/**
 	 * A class to represent a protein in simulation
@@ -80,6 +81,7 @@ public class Protein {
 			System.err.println("Could not read input file for protein " + name);
 		}
 		decayRate = halflife / 0.693147180559945f;//TODO WTF?
+		color = SimGenerator.colorList[myId%SimGenerator.colorList.length];
 	}
 	
 	public void readInputFile(String filename) throws IOException{
@@ -177,6 +179,14 @@ public class Protein {
 		return myId;
 	}
 	
+	public float[] getColor(){
+		return color;
+	}
+	
+	public void setColor(float[] c){
+		color = c;
+	}
+	
 	public void setLigands(SimGenerator sim){
 		//Takes the ligand info that was read in, checks that the other proteins exist
 		//and imports the data
@@ -217,10 +227,10 @@ public class Protein {
 				}
 			}
 		}
-		System.out.println("Ligands for " + name);
-		for (int i = 0; i < ligands.length; i++){
-			System.out.println("ID: " + ligands[i] + " Name: " + sim.getProteinName(ligands[i]) + " forward rate: "+ bindingRates[i] + " reverse rate: " + reverseRates[i] + " bondLength: " + bondLengths[i]+ " bondLifetimes: " + bondLifetimes[i]);
-		}
+		//System.out.println("Ligands for " + name);
+		//for (int i = 0; i < ligands.length; i++){
+			//System.out.println("ID: " + ligands[i] + " Name: " + sim.getProteinName(ligands[i]) + " forward rate: "+ bindingRates[i] + " reverse rate: " + reverseRates[i] + " bondLength: " + bondLengths[i]+ " bondLifetimes: " + bondLifetimes[i]);
+		//}
 	}
 	
 	public void print(PrintStream p){

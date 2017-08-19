@@ -69,10 +69,8 @@ public class ZeroGradient implements Gradient{
 	}
 	
 	@Override
-	public void setBaseColor(float r, float g, float b){
-		baseColor[0] = r;
-		baseColor[1] = g;
-		baseColor[2] = b;
+	public void setBaseColor(float[] c){
+		baseColor = c;
 	}
 	
 	@Override

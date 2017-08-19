@@ -23,6 +23,7 @@ package cellSim2;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.util.HashMap;
 
 import javax.vecmath.Vector3f;
 import javax.vecmath.Matrix3f;
@@ -60,10 +61,11 @@ public class Cell implements SimObject{
 	protected Simulation sim;
 	protected String objectType = "Cell";
 	protected boolean bound = false;
+	protected HashMap<Integer, TraffickingInfo> traffickRates;
 	
 	protected int baseProb = 40; //% probability that molecule will bind
-	protected int currentProb = baseProb; //For Uniform response, the probability that molecule will bind to the whole cell
-	protected int deltaProb = 10;
+	//protected int currentProb = baseProb; //For Uniform response, the probability that molecule will bind to the whole cell
+	//protected int deltaProb = 10;
 	
 	private static boolean finalWritten = false;
 	private BufferedWriter outputFile;
@@ -98,6 +100,8 @@ public class Cell implements SimObject{
 		for (int i = 0; i < 3; i++){
 			cellColor[i] = (float)(baseProb/100.0) * baseCellColor[i];
 		}
+		
+		traffickRates = new HashMap<Integer, TraffickingInfo>();
 	}
 	
 	public void updateObject(){
@@ -176,6 +180,16 @@ public class Cell implements SimObject{
 	
 	public SimRigidBody getRigidBody(){
 		return body;
+	}
+	
+	public TraffickingInfo getTraffickInfo(int pro, int id){
+		Integer i = new Integer(pro);
+		if (traffickRates.containsKey(i)){
+			return traffickRates.get(i);
+		}
+		else{
+			return new TraffickingInfo();
+		}
 	}
 	
 	public Vector3f getColor3Vector(){
