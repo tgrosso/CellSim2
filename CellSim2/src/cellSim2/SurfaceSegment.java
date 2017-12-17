@@ -16,6 +16,7 @@
 package cellSim2;
 
 import java.util.Arrays;
+import java.util.ArrayList;
 
 import javax.vecmath.Vector3f;
 
@@ -31,45 +32,44 @@ public class SurfaceSegment {
 	private SimObject parent;
 	private int myId;
 	private int[] receptorIds;
-	private long[] unboundReceptors;
-	private long[] boundReceptors;
+	private float[] unboundReceptors;
+	private float[] boundReceptors;
+	private float[] maxReceptors;
 	private HashMap<Integer, TraffickingInfo> traffickingRates;
-	private HashMap<Integer, Ligand[]> ligands;
+	private int visibleReceptor = -1;
 	
 	public SurfaceSegment(SimObject p, int id) {
 		parent = p;
 		myId = id;
 		receptorIds = new int[0];
-		unboundReceptors = new long[0];
-		boundReceptors = new long[0];
+		unboundReceptors = new float[0];
+		boundReceptors = new float[0];
+		maxReceptors = new float[0];
 		traffickingRates = new HashMap<Integer, TraffickingInfo>();
-		ligands = new HashMap<Integer, Ligand[]>();
 	}
 	
-	public void addReceptor(int proId, long unbound){
+	public void addReceptor(int proId, float unbound){
+		int index = getProteinIndex(proId);
+		if (index >= 0){
+			//This protein is already on this segment. Just add on
+			unboundReceptors[index] += unbound;
+			maxReceptors[index] += unbound;
+			return;
+		}
 		int[] newids = Arrays.copyOf(receptorIds, receptorIds.length+1);
-		long[] newUnbound = Arrays.copyOf(unboundReceptors, receptorIds.length+1);
-		long[] newBound = Arrays.copyOf(boundReceptors, receptorIds.length+1);
+		float[] newUnbound = Arrays.copyOf(unboundReceptors, receptorIds.length+1);
+		float[] newBound = Arrays.copyOf(boundReceptors, receptorIds.length+1);
+		float[] newMax = Arrays.copyOf(maxReceptors, receptorIds.length+1);
 		newids[receptorIds.length] = proId;
 		newUnbound[receptorIds.length] = unbound;
 		newBound[receptorIds.length] = 0L;
+		newMax[receptorIds.length] = unbound;
 		receptorIds = newids;
 		unboundReceptors = newUnbound;
 		boundReceptors = newBound;
-	}
-	
-	public void addLigand(int recId, Ligand l){
-		//Integer id = new Integer(recId);
-		if (ligands.containsKey(recId)){
-			Ligand[] li = ligands.get(recId);
-			Ligand[] newLi = Arrays.copyOf(li,  li.length+1);
-			newLi[li.length] = l;
-			ligands.put(recId, newLi);
-		}
-		else{
-			Ligand[] li = new Ligand[1];
-			li[0] = l;
-			ligands.put(recId, li);
+		maxReceptors = newMax;
+		if (receptorIds.length == 1){
+			visibleReceptor = 0;
 		}
 	}
 	
@@ -78,58 +78,91 @@ public class SurfaceSegment {
 		traffickingRates.put(recId, ti);
 	}
 	
+	public boolean setVisibleProtein(int id){
+		boolean proSet = false;
+		for (int i = 0; i < receptorIds.length; i++){
+			if (receptorIds[i] == id){
+				visibleReceptor = id;
+				proSet = true;
+			}
+		}
+		if (!proSet){
+			//Don't display if the visible protein is not a receptor
+			visibleReceptor = -1;
+		}
+		return proSet;
+	}
+	
+	public void setNewParent(SimObject o){
+		parent = o;
+	}
+	
 	public void removeTraffickingInfo(int recId){
 		if (traffickingRates.containsKey(recId)){
 			traffickingRates.remove(recId);
 		}
 	}
 	
-
-	public void update(Simulation sim, Vector3f position){
-		//for each protein
+	public float getProteinPercentage(int proID, boolean bound){
 		for (int i = 0; i < receptorIds.length; i++){
-			int pro = receptorIds[i];
-			TraffickingInfo ti;
-			//See if there are local trafficking rates
-			if (traffickingRates.containsKey(pro)){
-				//if so use those rates for this protein
-				ti = traffickingRates.get(pro);
-				//Then check to see if all values are within .1% of parent value
-				if (ti.withinRange(parent.getTraffickInfo(pro, myId))){
-					traffickingRates.remove(pro);
+			if (proID == receptorIds[i]){
+				if (bound){
+					return boundReceptors[i] / maxReceptors[i];
 				}
+				else{
+					return unboundReceptors[i] / maxReceptors[i];
+				}
+			}
+		}
+		//protein not found!
+		return -1;
+	}
+	
+	public int getProteinIndex(int proID){
+		for (int i = 0; i < receptorIds.length; i++){
+			if (receptorIds[i] == proID){
+				return i;
+			}
+		}
+		return -1;
+	}
+	
+	public void update(float min){
+		//Update all of the proteins on this segment
+		TraffickingInfo tf = new TraffickingInfo();
+		for (int i = 0; i < receptorIds.length; i++){
+			Integer key = new Integer(receptorIds[i]);
+			Protein pro = parent.getProtein(receptorIds[i]);
+			if (traffickingRates.containsKey(key)){
+				tf = traffickingRates.get(key);
 			}
 			else{
-				//if not, get the traffickingInfo from the parent
-				ti = parent.getTraffickInfo(pro, myId);
+				tf = parent.getTraffickInfo(receptorIds[i], myId);
 			}
-			//Find out the ligands that bind to this protein.
-			if (ligands.containsKey(pro)){
-				Ligand[] lig = ligands.get(pro);
-				for (int j = 0; j < lig.length; j++){
-					Ligand li = lig[j];
-					//if the ligand forms structural bonds, skip it. They only happen with collisions
-					if (li.formsStructuralBonds()){
-						continue;
-					}
-					//Find the concentration of this ligand at this position
-					long time = sim.getCurrentTimeMicroseconds();
-					float conc = li.getConcentration(time, position);
-					//Calculate the new number of bound and unbound molecules
-					float deltaTime = sim.getDeltaTimeMicroseconds();
-					float unbound = (float)unboundReceptors[i];
-					float bound = (float)boundReceptors[i];
-					float deltaUnbound = (((-1)* li.getForwardRate() *unbound * conc) + (li.getReverseRate() * bound) -(ti.getUnboundIntRate()*unbound) + ti.getSecretionRate()) * sim.getDeltaTimeMicroseconds();
-					float deltaBound = ((li.getForwardRate() * unbound * conc)-(li.getReverseRate()*bound)-(ti.getBoundIntRate()*bound)) * sim.getDeltaTimeMicroseconds();
-					unboundReceptors[i] = (long)(unboundReceptors[i] + deltaUnbound);
-					boundReceptors[i] = (long)(boundReceptors[i] + deltaBound);
-				}
+			if (tf.isBlank()){
+				//Reduce using half life
+				unboundReceptors[i] = unboundReceptors[i]*(float)Math.pow(.5, min/pro.getHalfLife());
 			}
 		}
 	}
 	
 	public void makeBond(long numMolecules){
 		
+	}
+	
+	public int getID(){
+		return myId;
+	}
+	public int[] getProteins(){
+		return receptorIds;
+	}
+	
+	public String getOutput(){
+		return "";
+	}
+	
+	public String getFinalOutput(){
+		return "";
 	}
 
 }

@@ -25,6 +25,7 @@ import javax.vecmath.Vector3f;
 import com.bulletphysics.collision.narrowphase.ManifoldPoint;
 import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.collision.shapes.SphereShape;
+import com.bulletphysics.collision.shapes.TriangleCallback;
 import com.bulletphysics.demos.opengl.IGL;
 import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
 import com.bulletphysics.linearmath.DefaultMotionState;
@@ -35,6 +36,7 @@ import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
+
 
 /**
  * @author Terri Applewhite-Grosso
@@ -50,6 +52,8 @@ public class SegmentedCell implements SimObject{
 	private boolean finalWritten = false;
 	private String cellType = "Unnamed Type";
 	private HashMap<Integer, TraffickingInfo> traffickRates;
+	private int visibleProtein = -1;
+	private boolean boundProtein = false;
 	
 	private BufferedWriter outputFile;
 	
@@ -69,6 +73,13 @@ public class SegmentedCell implements SimObject{
 	
 	private float surfaceArea;
 	private float[] triangleAreas;
+	private SurfaceSegment[] membraneSegments;
+	private boolean hasReceptors;
+	
+	private static float[] glMat = new float[16];
+	private static Vector3f aabbMax = new Vector3f(1e30f, 1e30f, 1e30f);
+	private static Vector3f aabbMin = new Vector3f(-1e30f, -1e30f, -1e30f);
+
 	
 
 	/**
@@ -110,11 +121,13 @@ public class SegmentedCell implements SimObject{
 		float downForce = (mass * 9.8f) - (volume * 9.8f);
 		body.setGravity(new Vector3f(0, -downForce, 0));
 		//body.setAngularVelocity(getRandomVector(maxDeltaVel));
+		hasReceptors = false;
 		
 		traffickRates = new HashMap<Integer, TraffickingInfo>();
 		triangleAreas = new float[numSegments];
 		for (int i = 0; i < numSegments; i++){
 			triangleAreas[i] = surfaceArea / numSegments;
+			//Shouldn't we calculate those areas here?
 		}
 		
 		sim.setNeedsGImpact(true);
@@ -218,6 +231,24 @@ public class SegmentedCell implements SimObject{
 		return cells;
 	}
 	
+	public void addReceptor(int proID, TraffickingInfo ti){
+		//Add the TraffickingInfo to the map
+		traffickRates.put(proID, ti);
+		//Find the steady state secretion rate for the whole cell
+		float totalUnbound = ti.getSecretionRate() / ti.getUnboundIntRate();
+		if (!hasReceptors){
+			membraneSegments = new SurfaceSegment[numSegments];
+			for (int i = 0; i < numSegments; i++){
+				membraneSegments[i] = new SurfaceSegment(this, i);
+			}
+			hasReceptors = true;
+		}
+		for (int i = 0; i < numSegments; i++){
+			long unbound = (long)(totalUnbound * triangleAreas[i] / surfaceArea);
+			membraneSegments[i].addReceptor(proID, unbound);
+		}
+	}
+	
 	public void setCellType(String s){
 		cellType = s;
 	}
@@ -239,6 +270,8 @@ public class SegmentedCell implements SimObject{
 			System.out.println("Cell " + this.myId + " has been deactivated.");
 			body.activate();
 		}
+		//System.out.println("Detail Level: " + detailLevel + " num segments: " + numSegments);
+		
 		float downForce = (mass * 9.8f) - (volume * 9.8f);
 		body.setGravity(new Vector3f(0, -downForce, 0));
 		
@@ -264,6 +297,12 @@ public class SegmentedCell implements SimObject{
 		distance.sub(trans.origin, lastPosition);
 		accumulatedDistance += distance.length();
 		lastPosition = new Vector3f(trans.origin);
+		
+		//Does this cell have surface receptors? If so, update them
+		if (hasReceptors){
+			
+		}
+		
 	}
 	
 	private Vector3f getRandomVector(float mag){
@@ -306,9 +345,8 @@ public class SegmentedCell implements SimObject{
 	}
 	
 	public TraffickingInfo getTraffickInfo(int pro, int id){
-		Integer i = new Integer(pro);
-		if (traffickRates.containsKey(i)){
-			TraffickingInfo ti = traffickRates.get(i);
+		if (traffickRates.containsKey(pro)){
+			TraffickingInfo ti = traffickRates.get(pro);
 			long sec = (long)(ti.getSecretionRate() * triangleAreas[id]/surfaceArea);
 			return new TraffickingInfo(sec, ti.getUnboundIntRate(), ti.getBoundIntRate());
 		}
@@ -319,7 +357,7 @@ public class SegmentedCell implements SimObject{
 	
 	public Vector3f getColor3Vector(){
 		//draws itself, so no color vector necessary
-		return (new Vector3f());
+		return (new Vector3f(1, 0, 1));
 	}
 	
 	public void setVisible(boolean v){
@@ -360,9 +398,51 @@ public class SegmentedCell implements SimObject{
 		return toRemove;
 	}
 	
-	public boolean specialRender(IGL gl, Transform t){
-		return false;
+	public Protein getProtein(int id){
+		return sim.getProtein(id);
 	}
+	
+	public boolean specialRender(IGL gl, Transform t){
+		gl.glPushMatrix();
+		t.getOpenGLMatrix(glMat);
+		gl.glMultMatrix(glMat);
+		
+		drawSegmentsCallback drawCallback = new drawSegmentsCallback(gl, this);
+		cellShape.processAllTriangles(drawCallback, aabbMin, aabbMax);
+		gl.glPopMatrix();
+		
+		return true;
+	}
+	
+	private static class drawSegmentsCallback extends TriangleCallback {
+		private IGL gl;
+		SegmentedCell parent;
+
+		public drawSegmentsCallback(IGL gl, SegmentedCell p) {
+			this.gl = gl;
+			this.parent = p;
+		}
+		
+		public void processTriangle(Vector3f[] triangle, int partId, int triangleIndex) {
+			float[] color = {1f, 1f, 1f};
+			gl.glBegin(IGL.GL_TRIANGLES);
+			gl.glColor3f(color[0], color[1], color[2]);
+			gl.glVertex3f(triangle[0].x, triangle[0].y, triangle[0].z);
+			//gl.glColor3f(color[0]);
+			gl.glVertex3f(triangle[1].x, triangle[1].y, triangle[1].z);
+			//gl.glColor3f(1, 0, 0);
+			gl.glVertex3f(triangle[2].x, triangle[2].y, triangle[2].z);
+			gl.glEnd();
+			gl.glBegin(IGL.GL_LINES);
+			gl.glColor3f(0f, 0f, 0f);
+			gl.glVertex3f(triangle[0].x, triangle[0].y, triangle[0].z);
+			gl.glVertex3f(triangle[1].x, triangle[1].y, triangle[1].z);
+			gl.glVertex3f(triangle[2].x, triangle[2].y, triangle[2].z);
+			gl.glVertex3f(triangle[0].x, triangle[0].y, triangle[0].z);
+			gl.glEnd();
+		}
+	}
+
 	
 	public boolean isBound(){
 		return bound;
@@ -374,6 +454,13 @@ public class SegmentedCell implements SimObject{
 	
 	public void bind(){
 		bound = true;
+	}
+	
+	public int getVisibleProtein(){
+		return visibleProtein;
+	}
+	public boolean showingBoundProtein(){
+		return boundProtein;
 	}
 	
 	public static String getDataHeaders(){

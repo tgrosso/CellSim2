@@ -48,6 +48,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Random;
 
@@ -154,16 +155,12 @@ public class Simulation extends DemoApplication{
 		
 		simValues.createWalls(this);
 		simValues.createCells(this);
-		/*
-		Wall w0 = new Wall(this, 150, 10, 100, new Vector3f(0, 0, 0));
-		w0.setWallColor(1.0f, 0.0f, 0.0f);
-		System.out.println(w0.getMass());
-		modelObjects.add(w0);
-		SegmentedCell c0 = new SegmentedCell(this, new Vector3f(0, 30, 0), 10, 1);
-		c0.setDensity(1f);
-		modelObjects.add(c0);
-		System.out.println("cell mass: " + c0.getMass());
-		*/
+		
+		//SegmentedCell c0 = new SegmentedCell(this, new Vector3f(0, 30, 0), 30, 3);
+		//c0.setDensity(0f);
+		//modelObjects.add(c0);
+		//System.out.println("cell mass: " + c0.getMass());
+		//*/
 
 		if (needGImpact){
 			GImpactCollisionAlgorithm.registerAlgorithm(dispatcher);
@@ -200,7 +197,7 @@ public class Simulation extends DemoApplication{
 
 		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		// simple dynamics world doesn't handle fixed-time-stepping
+		
 		//long oldTime = clockTime;
 		clockTime = clock.getTimeMicroseconds();
 		long newTime = clockTime * simValues.speedUp;
@@ -212,9 +209,23 @@ public class Simulation extends DemoApplication{
 
 		// step the simulation
 		if (dynamicsWorld != null) {
-			dynamicsWorld.stepSimulation(deltaTime / 1000000f);
+			//maxSubSteps * default frame rate (1/60) must be > time step
+			float time_step = deltaTime / 1000000f;
+			int max_substeps = (int)Math.ceil(time_step * 60f);
+			dynamicsWorld.stepSimulation(time_step, max_substeps);
 			// optional but useful: debug drawing
 			dynamicsWorld.debugDrawWorld();
+			
+			//System.out.println("Simulation stepped");
+			int numManifolds = dynamicsWorld.getDispatcher().getNumManifolds();
+			for (int i=0;i<numManifolds;i++){
+				//System.out.println(collisionID);
+				PersistentManifold contactManifold =  dynamicsWorld.getDispatcher().getManifoldByIndexInternal(i);
+				RigidBody objA = (RigidBody)contactManifold.getBody0();
+				RigidBody objB = (RigidBody)contactManifold.getBody1();
+				int numContacts = contactManifold.getNumContacts();
+				//System.out.println("Body 0:" + objA.toString() + " Body 1: " + objB.toString() + " num contacts: " + numContacts);
+			}
 		}
 		
 		//Check for collisions and do stuff
@@ -256,6 +267,26 @@ public class Simulation extends DemoApplication{
 					}
 				}
 			}
+			
+			gl.glBegin(GL_LINES);
+			gl.glColor3f(0f, 0f, 0f);
+			gl.glVertex3f(350, -45, 250);
+			gl.glVertex3f(-350, -45, 250);
+			gl.glVertex3f(0, -45, 250);
+			gl.glVertex3f(0, -45, -250);
+			gl.glColor3f(1f, 0f, 0f);
+			gl.glVertex3f(350, -90, 250);
+			gl.glVertex3f(-350, -90, 250);
+			//gl.glVertex3f(-250, -90, -350);
+			//gl.glVertex3f(-250, -90, 350);
+			//gl.glVertex3f(250, -90, -350);
+			//gl.glVertex3f(250, -90, 350);
+			gl.glVertex3f(-350, -90, -250);
+			gl.glVertex3f(350, -90, -250);
+			gl.glEnd();
+			
+			
+			gl.glEnable(GL_LIGHTING);
 			/*
 			Transform ta = new Transform(), tb = new Transform();
 			int numConstraints = dynamicsWorld.getNumConstraints();
@@ -333,6 +364,10 @@ public class Simulation extends DemoApplication{
 	
 	public Protein getProtein(int id){
 		return simValues.proteins.get(id);
+	}
+	
+	public ArrayList<Gradient> getGradients(){
+		return simValues.gradients;
 	}
 	
 	public long getCurrentTimeMicroseconds(){

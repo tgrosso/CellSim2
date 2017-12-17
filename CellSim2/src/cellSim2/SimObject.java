@@ -51,5 +51,8 @@ public interface SimObject {
 		public void setOutputFile(BufferedWriter bw);
 		public void writeOutput();
 		public TraffickingInfo getTraffickInfo(int protein, int id);
+		public int getVisibleProtein();
+		public boolean showingBoundProtein();
+		public Protein getProtein(int id);
 
 }

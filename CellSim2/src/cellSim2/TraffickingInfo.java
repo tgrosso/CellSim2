@@ -36,4 +36,8 @@ public class TraffickingInfo {
 		boolean bound = Math.abs(ti.getBoundIntRate() - boundInternalizationRate) <= (ti.getBoundIntRate()*.001);
 		return secretion && unbound && bound;
 	}
+	
+	public boolean isBlank(){
+		return (secretionRate == 0 && unboundInternalizationRate == 0 && boundInternalizationRate == 0);
+	}
 }

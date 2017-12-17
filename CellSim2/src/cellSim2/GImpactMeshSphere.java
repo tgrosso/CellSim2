@@ -19,8 +19,7 @@ private final static int VERTEX_DIM = 3, EDGE_INDICES = 2, TRIANGLE_INDICES = 3;
 	private static int[][] trianglesByEdges;
 	private static int[][] trianglesByVertices;
 	private static TriangleIndexVertexArray[] indexVertexArray;
-	private int minYvalue;
-	
+		
 	private int detail_level;
 
 	static{

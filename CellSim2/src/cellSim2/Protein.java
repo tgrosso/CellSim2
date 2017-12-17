@@ -82,6 +82,7 @@ public class Protein {
 		}
 		decayRate = halflife / 0.693147180559945f;//TODO WTF?
 		color = SimGenerator.colorList[myId%SimGenerator.colorList.length];
+		System.out.println("Protein id " + myId + " " + name + " color: " + color[0] + ", " + color[1] + ", " + color[2]);
 	}
 	
 	public void readInputFile(String filename) throws IOException{
@@ -185,6 +186,35 @@ public class Protein {
 	
 	public void setColor(float[] c){
 		color = c;
+	}
+	
+	public int bindsTo(int pro){
+		for (int i = 0; i < ligands.length; i++){
+			if (ligands[i] == pro){
+				return i;
+			}
+		}
+		return -1;
+	}
+	
+	public int[] getLigands(){
+		return ligands;
+	}
+	
+	public float getBindingRate(int index){
+		return bindingRates[index];
+	}
+	
+	public float getReverseRate(int index){
+		return reverseRates[index];
+	}
+	
+	public float getBondLength(int index){
+		return bondLengths[index];
+	}
+	
+	public float getBondLifetime(int index){
+		return bondLifetimes[index];
 	}
 	
 	public void setLigands(SimGenerator sim){

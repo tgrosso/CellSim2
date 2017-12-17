@@ -57,6 +57,8 @@ public class Cell implements SimObject{
 	private float[] cellColor;
 	protected float cameraDistance = 20f;
 	protected boolean visible = true;
+	protected int visibleProtein = -1;
+	protected boolean boundProtein = false;
 	protected boolean toRemove = false;
 	protected Simulation sim;
 	protected String objectType = "Cell";
@@ -283,6 +285,13 @@ public class Cell implements SimObject{
 		bound = true;
 	}
 	
+	public int getVisibleProtein(){
+		return visibleProtein;
+	}
+	public boolean showingBoundProtein(){
+		return boundProtein;
+	}
+	
 	public void setOutputFile(BufferedWriter bw){
 		outputFile = bw;
 	}
@@ -297,6 +306,10 @@ public class Cell implements SimObject{
 	
 	public void wrapup(){
 		cell_ids = 0;
+	}
+	
+	public Protein getProtein(int id){
+		return sim.getProtein(id);
 	}
 
 }

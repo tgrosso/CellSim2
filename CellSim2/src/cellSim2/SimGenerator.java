@@ -389,12 +389,10 @@ public class SimGenerator {
 					newWall.setVisible(true);
 					newWall.setWallColor(0.6f, 0.6f, 1.0f);
 					newWall.setDistFromSource(distFromSource);
-					//if old wall has protein coatings, they need to be transfered
-					int numCoat = oldWall.getNumCoatings();
-					if (numCoat > 0){
-						for (int p = 0; p < numCoat; p++){
-							newWall.coatWithProtein(oldWall.getCoatingProtein(p), oldWall.getCoatingConcentration(p));
-						}
+					//if old wall has SurfaceSegments, they need to be transfered
+					int numSegs = oldWall.getNumSegments();
+					for (int p = 0; p < numSegs; p++){
+						oldWall.getSurfaceSegment(p).setNewParent(newWall);
 					}
 					walls.set(thisWall, newWall);
 				}
@@ -403,9 +401,9 @@ public class SimGenerator {
 				ArrayList<String[]> coats = wallData.get(key);
 				for (int i = 0; i < coats.size(); i++){
 					String[] thisCoat = coats.get(i);
-					if (thisCoat.length < 3){
+					if (thisCoat.length < 4){
 						System.err.println("Bad input for coating wall. Not enough values");
-						System.err.println("Usage: wall coat wallID protein surfaceConcentration");
+						System.err.println("Usage: wall coat wallID protein surfaceConcentration surface");
 						System.err.println("Not using");
 						continue;
 					}
@@ -447,7 +445,32 @@ public class SimGenerator {
 						System.err.println("Could not parse surface concentration: " + thisCoat[2]);
 						continue;
 					}
-					walls.get(thisWall).coatWithProtein(pro, conc);
+					//Now find which surface
+					int surf = -1;
+					switch(thisCoat[3]){
+						case "FRONT":
+							surf = Wall.FRONT;
+							break;
+						case "BACK":
+							surf = Wall.BACK;
+							break;
+						case "TOP":
+							surf = Wall.TOP;
+							break;
+						case "BOTTOM":
+							surf = Wall.BOTTOM;
+							break;
+						case "LEFT":
+							surf = Wall.LEFT;
+							break;
+						case "RIGHT":
+							surf = Wall.RIGHT;
+							break;
+						default:
+							System.err.println("Wall surface must be BACK, BOTTOM, FRONT, LEFT, RIGHT or TOP. Found: " + thisCoat[3]);
+							continue;
+					}
+					walls.get(thisWall).coatWithProtein(pro, conc, surf);
 				}
 			}
 		}
@@ -505,6 +528,7 @@ public class SimGenerator {
 		float cellCenterY = -vesselSize.y/2 + maxRadius + 1;
 		System.out.println("Num cells: " + numCells);
 		System.out.println("maxRadius: " + maxRadius);
+		System.out.println("Center y: " + cellCenterY);
 		
 		//if there is only one cell. put it right in the middle - it's a testing issue
 		if (numCells == 1){

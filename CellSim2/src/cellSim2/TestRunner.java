@@ -68,7 +68,7 @@ public class TestRunner {
 	 * This class runs one or more simulations and is the class used to run the program. 
 	 * It takes as input two text files. One, DEFAULT_FILE, provides a list of variables and their initial
 	 * values. The second, PARAM_FILE, is a list of parameters with values that will
-	 * be tested. This class will generate simulations for all permutations
+	 * be tested. This class will generate simulations for all combinations
 	 * of the variable values and create summary files when the simulations
 	 * are complete.
 	 * All output files will be generated in the directory of the PARAM_FILE.
