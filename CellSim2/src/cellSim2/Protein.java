@@ -46,6 +46,7 @@ public class Protein {
 	private float[] bondLengths;
 	private float[] bondLifetimes;
 	private float[] color;
+	public static int MOLS_PER_BOND = 5;
 
 	/**
 	 * A class to represent a protein in simulation
@@ -82,7 +83,7 @@ public class Protein {
 		}
 		decayRate = halflife / 0.693147180559945f;//TODO WTF?
 		color = SimGenerator.colorList[myId%SimGenerator.colorList.length];
-		System.out.println("Protein id " + myId + " " + name + " color: " + color[0] + ", " + color[1] + ", " + color[2]);
+		//System.out.println("Protein id " + myId + " " + name + " color: " + color[0] + ", " + color[1] + ", " + color[2]);
 	}
 	
 	public void readInputFile(String filename) throws IOException{

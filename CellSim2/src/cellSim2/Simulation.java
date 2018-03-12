@@ -20,13 +20,16 @@ package cellSim2;
  *
  */
 
+import com.bulletphysics.BulletGlobals;
 import com.bulletphysics.util.ObjectArrayList;
 import com.bulletphysics.collision.broadphase.BroadphaseInterface;
 import com.bulletphysics.collision.broadphase.DbvtBroadphase;
 import com.bulletphysics.collision.dispatch.CollisionDispatcher;
+import com.bulletphysics.collision.dispatch.CollisionObject;
 import com.bulletphysics.collision.dispatch.DefaultCollisionConfiguration;
 import com.bulletphysics.collision.narrowphase.PersistentManifold;
 import com.bulletphysics.collision.narrowphase.ManifoldPoint;
+import com.bulletphysics.ContactAddedCallback;
 import com.bulletphysics.demos.basic.BasicDemo;
 import com.bulletphysics.demos.opengl.DemoApplication;
 import com.bulletphysics.demos.opengl.IGL;
@@ -65,6 +68,7 @@ public class Simulation extends DemoApplication{
 	
 	private ObjectArrayList<SimObject> modelObjects;
 	private ObjectArrayList<Gradient> gradients;
+	private ObjectArrayList<BondConstraint> constraints;
 
 	private float baseCameraDistance = 150;
 	private boolean needGImpact = false;
@@ -75,10 +79,11 @@ public class Simulation extends DemoApplication{
 	private long oldTime, currentTime, startTime, clockTime, lastDataOutput, deltaTime;
 	private float averageDeltaTime;
 	private long numFrames;
+	private SimObject[][] processedCollisions;
 	
 	private Random random;
 	
-	private BufferedWriter logFile, cellData, wallData, gradientTestFile;
+	private BufferedWriter logFile, cellData, wallData, gradientTestFile, constraintFile;
 	private ObjectArrayList<BufferedWriter> gradientDataFiles;
 	
 	int testWidth;
@@ -87,6 +92,7 @@ public class Simulation extends DemoApplication{
 		super(gl);
 		simValues = s;
 		modelObjects = new ObjectArrayList<SimObject>();
+		constraints = new ObjectArrayList<BondConstraint>();
 		//startTime is the underlying clock time. clockTime - startTime = currentTime
 		startTime = clock.getTimeMicroseconds();
 		oldTime = startTime;
@@ -104,7 +110,7 @@ public class Simulation extends DemoApplication{
 		random = new Random();
 		gradientDataFiles = new ObjectArrayList<BufferedWriter>();
 		testWidth = 1200;
-		
+				
 		//Set up the output files
 		try{
 			logFile = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "logFile.csv")));
@@ -127,11 +133,15 @@ public class Simulation extends DemoApplication{
 			}
 			str += "\n";
 			gradientTestFile.write(str);
+			constraintFile = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "constraintData.csv")));
+			constraintFile.write(BondConstraint.getDataHeaders());
 		}
 		catch (IOException e){
 			System.err.println("Cannot generate output files!");
 		}
 		writeToLog(getFormattedTime() + "\tInitialization Complete");
+		BulletGlobals.setContactAddedCallback(new SimContactAddedCallback());
+		processedCollisions = new SimObject [0][2];
 	}
 	
 	@Override
@@ -154,20 +164,17 @@ public class Simulation extends DemoApplication{
 		dynamicsWorld.setGravity(new Vector3f(0f, 0f, 0f));
 		
 		simValues.createWalls(this);
+		//writeToLog(getFormattedTime() + "\tWalls created");
+		//writeToLog(getFormattedTime() + "\t" +simValues.simMax[0] + "," + simValues.simMax[1] + "," + simValues.simMax[2]);
+		//writeToLog(getFormattedTime() + "\t" +simValues.simMin[0] + "," + simValues.simMin[1] + "," + simValues.simMin[2]);
 		simValues.createCells(this);
-		
-		//SegmentedCell c0 = new SegmentedCell(this, new Vector3f(0, 30, 0), 30, 3);
-		//c0.setDensity(0f);
-		//modelObjects.add(c0);
-		//System.out.println("cell mass: " + c0.getMass());
-		//*/
 
 		if (needGImpact){
 			GImpactCollisionAlgorithm.registerAlgorithm(dispatcher);
 		}
 		
 		clientResetScene();
-
+		writeToLog(getFormattedTime() + "\tFinished Init Physics");
 	}
 		
 	@Override
@@ -190,9 +197,23 @@ public class Simulation extends DemoApplication{
 			lastDataOutput = currentTime;
 		}
 		int numObjects = modelObjects.size();
+		if (numObjects == 0){
+			//if all objects have left the vessel, stop the simulation
+			finished = true;
+		}
 		for (int i = 0; i < numObjects; i++){
 			SimObject bioObj = modelObjects.getQuick(i);
 			bioObj.updateObject();
+			bioObj.clearCollisions();
+		}
+		
+		int numConstraints = constraints.size();
+		for (int i = numConstraints-1; i >=0; i--){
+			BondConstraint bc = constraints.getQuick(i);
+			bc.update();
+			if (!bc.isActive()){
+				removeConstraint(bc);
+			}
 		}
 
 		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -213,20 +234,53 @@ public class Simulation extends DemoApplication{
 			float time_step = deltaTime / 1000000f;
 			int max_substeps = (int)Math.ceil(time_step * 60f);
 			dynamicsWorld.stepSimulation(time_step, max_substeps);
+			//System.out.println("Simulation stepped");
 			// optional but useful: debug drawing
 			dynamicsWorld.debugDrawWorld();
 			
 			//System.out.println("Simulation stepped");
+			/*
 			int numManifolds = dynamicsWorld.getDispatcher().getNumManifolds();
 			for (int i=0;i<numManifolds;i++){
 				//System.out.println(collisionID);
 				PersistentManifold contactManifold =  dynamicsWorld.getDispatcher().getManifoldByIndexInternal(i);
-				RigidBody objA = (RigidBody)contactManifold.getBody0();
-				RigidBody objB = (RigidBody)contactManifold.getBody1();
+				SimRigidBody objA = (SimRigidBody)contactManifold.getBody0();
+				SimRigidBody objB = (SimRigidBody)contactManifold.getBody1();
 				int numContacts = contactManifold.getNumContacts();
-				//System.out.println("Body 0:" + objA.toString() + " Body 1: " + objB.toString() + " num contacts: " + numContacts);
+				//System.out.println("Body A:" + objA.getParent().getType() + objA.getParent().getID()+ " Body B:" + objB.getParent().getType() + objB.getParent().getID());
+				for (int j = 0; j < numContacts;j++){
+					ManifoldPoint mp = contactManifold.getContactPoint(j);
+					//System.out.println("   " + "Point " + j + ": normalOnB: " + mp.normalWorldOnB.toString() + " point on A: " + mp.localPointA);
+				}
+			}*/
+		}
+		
+		//Remove any objects that have moved out of range 
+		//We go through them backwards so that we don't mess up the indices
+		Vector3f tempMin = new Vector3f();
+		Vector3f tempMax = new Vector3f();
+		float[] tMin  = new float[3];
+		float[] tMax = new float[3];
+		for (int i = numObjects-1; i >= 0; i--){
+			SimObject bioObj = modelObjects.getQuick(i);
+			bioObj.getRigidBody().getAabb(tempMin, tempMax);
+			tempMin.get(tMin);
+			tempMax.get(tMax);
+			boolean inside = true;
+			for (int j = 0; j < 3; j++){
+				if (tMin[j] > simValues.simMax[j] || tMax[j] < simValues.simMin[j]){
+					inside = false;
+					break;
+				}
+			}
+			if (!inside){
+				bioObj.writeOutput();
+				writeToLog(bioObj.finalOutput());
+				removeSimulationObject(bioObj);
+				bioObj.destroy();
 			}
 		}
+		
 		
 		//Check for collisions and do stuff
 
@@ -235,6 +289,7 @@ public class Simulation extends DemoApplication{
 			//glFlush();
 			//glutSwapBuffers();
 		}
+		
 		
 		if (currentTime >= simValues.endTime*1e6){
 			finished = true;
@@ -287,7 +342,7 @@ public class Simulation extends DemoApplication{
 			
 			
 			gl.glEnable(GL_LIGHTING);
-			/*
+			
 			Transform ta = new Transform(), tb = new Transform();
 			int numConstraints = dynamicsWorld.getNumConstraints();
 			for (int i = 0; i < numConstraints; i++){
@@ -302,7 +357,7 @@ public class Simulation extends DemoApplication{
 					gl.glVertex3f(tb.origin.x, tb.origin.y, tb.origin.z);
 					gl.glEnd();
 				}
-			}*/
+			}
 		}
 	}
 
@@ -323,6 +378,24 @@ public class Simulation extends DemoApplication{
 		//Ugh!  How do I do this?
 		dynamicsWorld.removeRigidBody(obj.getRigidBody());
 		modelObjects.remove(obj);
+	}
+	
+	public void addConstraint(BondConstraint c){
+		dynamicsWorld.addConstraint(c);
+		constraints.add(c);
+	}
+	
+	public void removeConstraint(BondConstraint c){
+		try{
+			constraintFile.write(c.finalOutput());
+		}
+		catch(IOException e){
+			System.err.println("Could not write to bond constraint file");
+		}
+		
+		dynamicsWorld.removeConstraint(c);
+		constraints.remove(c);
+		c.destroy();
 	}
 	
 	private void outputData(){
@@ -366,8 +439,31 @@ public class Simulation extends DemoApplication{
 		return simValues.proteins.get(id);
 	}
 	
+	public int getProteinId(String name){
+		int num_pro = simValues.proteins.size();
+		for (int i = 0; i < num_pro; i++){
+			Protein p = simValues.proteins.get(i);
+			if (p.getName().equalsIgnoreCase(name)){
+				return i;
+			}
+		}
+		return -1;
+	}
+	
 	public ArrayList<Gradient> getGradients(){
 		return simValues.gradients;
+	}
+	
+	public Gradient getGradient(int pro){
+		ArrayList<Gradient> grads = getGradients();
+		int numGrads = grads.size();
+		for (int i = 0; i < numGrads; i++){
+			Gradient g = grads.get(i);
+			if (g.getProtein() == pro){
+				return g;
+			}
+		}
+		return null;
 	}
 	
 	public long getCurrentTimeMicroseconds(){
@@ -449,13 +545,23 @@ public class Simulation extends DemoApplication{
 			writeToLog(bioObj.finalOutput());
 		}
 		
+		
 		try{
+			int numConstraints = constraints.size();
+			for (int i = 0; i < numConstraints; i++){
+				BondConstraint bc = constraints.getQuick(i);
+				constraintFile.write(bc.finalOutput());
+			}
+			constraintFile.flush();
+			constraintFile.close();
+	
 			logFile.flush();
 			logFile.close();
 			cellData.flush();
 			cellData.close();
 			wallData.flush();
 			wallData.close();
+			
 			for (int i = 0; i < gradientDataFiles.size(); i++){
 				gradientDataFiles.get(i).flush();
 				gradientDataFiles.get(i).close();
@@ -477,6 +583,31 @@ public class Simulation extends DemoApplication{
 				e1.printStackTrace();
 			}
 		//System.out.println(e.toString());
+		}
+	}
+	
+	private class SimContactAddedCallback extends ContactAddedCallback{
+		
+		public boolean contactAdded(ManifoldPoint cp, CollisionObject colObj0, int partId0, int index0, CollisionObject colObj1, int partId1, int index1){
+			SimRigidBody b0 = (SimRigidBody)colObj0, b1 = (SimRigidBody)colObj1;
+			SimObject s0 = b0.getParent(), s1 = b1.getParent();
+			if (s0.collidedWith(s1) | s1.collidedWith(s0)){
+				//This deliberately does NOT short circuit. It adds the other object of pair to both objects
+				//Only deal with new contacts if they haven't been dealt with in this time step
+				return false;
+			}
+			//System.out.println("\nContact added: " + cp.positionWorldOnA + " " + cp.positionWorldOnB);
+			if (b0.getParent().getType().equals("Wall") && !b1.getParent().getType().equals("Wall")){
+				b1.getParent().collided(b0.getParent(), cp, 0);
+			}
+			else if (b1.getParent().getType().equals("Wall") && !b0.getParent().getType().equals("Wall")){
+				b0.getParent().collided(b1.getParent(), cp, 0);
+			}
+			else{
+				b0.getParent().collided(b1.getParent(), cp, 1);
+			}
+			
+			return true;
 		}
 	}
 

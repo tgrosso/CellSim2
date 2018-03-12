@@ -2,6 +2,7 @@ package cellSim2;
 
 public class TraffickingInfo {
 	
+	public static final int Secretion = 0, IntUnbound = 1, IntBound = 2;
 	private float secretionRate; //in molecules per microseconds
 	private float unboundInternalizationRate;  //expressed as per microsecond
 	private float boundInternalizationRate; //expressed as per microsecond
@@ -27,6 +28,18 @@ public class TraffickingInfo {
 	
 	public float getBoundIntRate(){
 		return boundInternalizationRate;
+	}
+	
+	public float getRate(int i){
+		switch(i){
+			case 0:
+				return secretionRate;
+			case 1:
+				return unboundInternalizationRate;
+			case 2:
+				return boundInternalizationRate;
+		}
+		return secretionRate;
 	}
 	
 	public boolean withinRange(TraffickingInfo ti){

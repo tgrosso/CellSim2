@@ -27,6 +27,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map.Entry;
+import java.util.HashSet;
+import java.util.Iterator;
+
 
 import javax.vecmath.Vector3f;
 
@@ -41,7 +44,7 @@ public class SimGenerator {
 	public static float[][]colorList = new float[][]{
 		  { 1.0f, 0.0f, 0.0f },//red
 		  { 0.0f, 1.0f, 0.0f },//green
-		  { 0.3f, 0.0f, 0.5f},//indigo
+		  { 0.0f, 0.0f, 0.1f},//blue
 		  { 1.0f, 0.5f, 0.0f},//orange
 		  { 0.0f, 1.0f, 1.0f}, //cyan
 		  { 1.0f, 0.5f, 1.0f}, //violet
@@ -62,10 +65,11 @@ public class SimGenerator {
 	public int secBetweenImages;
 	public boolean displayImages;
 	public int speedUp;
+	public float[] simMin = {Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE};
+	public float[] simMax = {Float.MIN_VALUE, Float.MIN_VALUE, Float.MIN_VALUE};
 	
 	public ArrayList<Protein> proteins;
 	public ArrayList<Gradient> gradients;
-	public ArrayList<Ligand> proteinPairs;
 	
 	public ImageGenerator imageGen;
 	
@@ -92,8 +96,6 @@ public class SimGenerator {
 		
 		gradients = new ArrayList<Gradient>();
 		createGradients();
-		
-		
 	}
 	
 	private void fillVariables(){
@@ -307,7 +309,7 @@ public class SimGenerator {
 		walls.add(nextWall);
 		//System.out.println("Front: "+nextWall.toString());
 		
-		
+		/*
 		//left
 		position.set((float)((channelWidth+wallThick)/2.0), 0f, 0f);
 		nextWall = new Wall(sim, wallThick, channelHeight, channelDepth, position); 
@@ -315,8 +317,9 @@ public class SimGenerator {
 		nextWall.setVisible(false);
 		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
-		//System.out.println("Left: " + nextWall.toString());
+		//System.out.println("Left: " + nextWall.toString());*/
 		
+		/*
 		//right
 		position.set((float)((-channelWidth+wallThick)/2.0), 0f, 0f);
 		nextWall = new Wall(sim, wallThick, channelHeight, channelDepth, position); 
@@ -324,7 +327,7 @@ public class SimGenerator {
 		nextWall.setVisible(false);
 		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
-		//System.out.println("Right: " + nextWall.toString());
+		//System.out.println("Right: " + nextWall.toString());*/
 		
 		sim.setBaseCameraDistance((float)((channelWidth/2)*(1.05)*Math.tan(Math.PI/3)));
 		
@@ -477,6 +480,40 @@ public class SimGenerator {
 		for (int i = 0; i < walls.size(); i++){
 			sim.addSimulationObject(walls.get(i));
 		}
+		Vector3f tempMin =new Vector3f();
+		Vector3f tempMax =new Vector3f();
+		float[] tMin = new float[3];
+		float[] tMax = new float[3];
+		for (int i = 0; i < walls.size(); i++){
+			//System.out.println("Debugging: SimGenerator");
+			Wall w = walls.get(i);
+			//System.out.println("Wall number: " + i);
+			HashSet<Integer> lig = w.getReceptorsBindTo();
+			HashSet<Integer> rec = w.getSurfaceProteins();
+			Iterator<Integer> iter = lig.iterator();
+			//System.out.println("Receptors on this wall bind to:");
+			/*while (iter.hasNext()) {
+			    //System.out.println("    " + sim.getProteinName(iter.next().intValue()));
+			}*/
+			iter = rec.iterator();
+			//System.out.println("Proteins on this wall:");
+			/*while (iter.hasNext()) {
+			    System.out.println("    " + sim.getProteinName(iter.next().intValue()));
+			}*/
+			
+			//Set up the minimum and maximum bounds of the simulation boundaries
+			w.getRigidBody().getAabb(tempMin, tempMax);
+			tempMin.get(tMin);
+			tempMax.get(tMax);
+			for (int j = 0; j < 3; j++){
+				if (tMin[j] < simMin[j]){
+					simMin[j] = tMin[j];
+				}
+				if (tMax[j] > simMax[j]){
+					simMax[j] = tMax[j];
+				}
+			}
+		}
 	}
 	
 	public void createCells(Simulation sim){
@@ -485,13 +522,11 @@ public class SimGenerator {
 		//System.out.println("Sim Generator: Creating Cells");
 		
 		ArrayList<SegmentedCell> cells = new ArrayList<SegmentedCell>();
-		int index = 0;
+		
 		HashMap<String, String> cellFiles = simValues.getCells();
 		for (Entry<String, String> entry : cellFiles.entrySet()){
 			String key = entry.getKey();
 			cells.addAll(SegmentedCell.readInFile(key, entry.getValue(), sim));
-			index++;
-			//System.out.println("Cell: " + key);
 		}
 		
 		float maxRadius = 1f;
@@ -526,9 +561,9 @@ public class SimGenerator {
 		}
 		//Determine the y value for the origin of each cell
 		float cellCenterY = -vesselSize.y/2 + maxRadius + 1;
-		System.out.println("Num cells: " + numCells);
-		System.out.println("maxRadius: " + maxRadius);
-		System.out.println("Center y: " + cellCenterY);
+		//System.out.println("Num cells: " + numCells);
+		//System.out.println("maxRadius: " + maxRadius);
+		//System.out.println("Center y: " + cellCenterY);
 		
 		//if there is only one cell. put it right in the middle - it's a testing issue
 		if (numCells == 1){
@@ -536,34 +571,53 @@ public class SimGenerator {
 			//sim.removeSimulationObject(c);
 			c.setInitialPosition(new Vector3f(0, cellCenterY, 0));
 			//sim.addSimulationObject(c);
-			return;
 		}
-		//System.out.println("y: " + cellCenterY);
-		//Randomize the grid indexes
-		int[] grid = new int[gridNum];
-		for (int i = 0; i < gridNum; i++){
-			grid[i] = i;
-		}
-		int temp = 0;
-		for (int i = 0; i < gridNum; i++){
-			int nextIndex = (int)(sim.getNextRandomF() * gridNum);
-			//System.out.println(i + "nextIndex: " + nextIndex);
-			temp = grid[nextIndex];
-			grid[nextIndex] = grid[i];
-			grid[i] = temp;
-		}
-		//Add cells into the grid in random order
+		else{
+			//System.out.println("y: " + cellCenterY);
+			//Randomize the grid indexes
+			int[] grid = new int[gridNum];
+			for	(int i = 0; i < gridNum; i++){
+				grid[i] = i;
+			}
+			int temp = 0;
+			for (int i = 0; i < gridNum; i++){
+				int nextIndex = (int)(sim.getNextRandomF() * gridNum);
+				//System.out.println(i + "nextIndex: " + nextIndex);
+				temp = grid[nextIndex];
+				grid[nextIndex] = grid[i];
+				grid[i] = temp;
+			}
+			//Add cells into the grid in random order
 		
-		for (int i = 0; i < numCells; i++){
-			int g_row = grid[i] / cols;
-			int g_col = grid[i] % cols;
-			float x = (vesselSize.x/2)-(gridSize / 2) - (g_col * gridSize);
-			float z = (vesselSize.z/2)-(gridSize / 2) - (g_row * gridSize);
-			SegmentedCell c = cells.get(i);
-			//sim.removeSimulationObject(c);
-			c.setInitialPosition(new Vector3f(x, cellCenterY, z));
-			//sim.addSimulationObject(c);
+			for (int i = 0; i < numCells; i++){
+				int g_row = grid[i] / cols;
+				int g_col = grid[i] % cols;
+				float x = (vesselSize.x/2)-(gridSize / 2) - (g_col * gridSize);
+				float z = (vesselSize.z/2)-(gridSize / 2) - (g_row * gridSize);
+				SegmentedCell c = cells.get(i);
+				//sim.removeSimulationObject(c);
+				c.setInitialPosition(new Vector3f(x, cellCenterY, z));
+				//sim.addSimulationObject(c);
+			}
 		}
+		//For debugging
+		/*for (int i = 0; i < numCells; i++){
+			//System.out.println("Debugging: SimGenerator");
+			SegmentedCell c = cells.get(i);
+			//System.out.println("Cell number: " + i);
+			HashSet<Integer> lig = c.getReceptorsBindTo();
+			HashSet<Integer> rec = c.getSurfaceProteins();
+			Iterator<Integer> iter = lig.iterator();
+			System.out.println("Receptors on this cell bind to:");
+			while (iter.hasNext()) {
+			    System.out.println("    " + sim.getProteinName(iter.next().intValue()));
+			}
+			iter = rec.iterator();
+			System.out.println("Proteins on this cell:");
+			while (iter.hasNext()) {
+			    System.out.println("    " + sim.getProteinName(iter.next().intValue()));
+			}
+		}*/
 	}
 	
 	public Defaults getValues(){

@@ -97,10 +97,29 @@ public class SurfaceSegment {
 		parent = o;
 	}
 	
+	public SimObject getParent(){
+		return parent;
+	}
+	
 	public void removeTraffickingInfo(int recId){
 		if (traffickingRates.containsKey(recId)){
 			traffickingRates.remove(recId);
 		}
+	}
+	
+	public float getNumMolecules(int proID, boolean bound){
+		for (int i = 0; i < receptorIds.length; i++){
+			if (proID == receptorIds[i]){
+				if (bound){
+					return boundReceptors[i];
+				}
+				else{
+					return unboundReceptors[i];
+				}
+			}
+		}
+		//protein not found!
+		return -1;
 	}
 	
 	public float getProteinPercentage(int proID, boolean bound){
@@ -127,9 +146,10 @@ public class SurfaceSegment {
 		return -1;
 	}
 	
-	public void update(float min){
+	public void update(long now, long deltaMicroSecs, Vector3f worldCenter){
 		//Update all of the proteins on this segment
 		TraffickingInfo tf = new TraffickingInfo();
+		float minutes = deltaMicroSecs / 1000000f / 60;
 		for (int i = 0; i < receptorIds.length; i++){
 			Integer key = new Integer(receptorIds[i]);
 			Protein pro = parent.getProtein(receptorIds[i]);
@@ -141,13 +161,58 @@ public class SurfaceSegment {
 			}
 			if (tf.isBlank()){
 				//Reduce using half life
-				unboundReceptors[i] = unboundReceptors[i]*(float)Math.pow(.5, min/pro.getHalfLife());
+				unboundReceptors[i] = unboundReceptors[i]*(float)Math.pow(.5, minutes/pro.getHalfLife());
+				return;
+			}
+			//Use the trafficking info to update the number of proteins
+			//See if there is a gradient of any ligands
+			int[] ligands = pro.getLigands();
+			for (int k = 0; k < ligands.length; k++){
+				Gradient g = parent.getGradient(ligands[k]);
+				float ligandConc = 0;
+				if (g!= null){
+					ligandConc = g.getConcentration(now, worldCenter);				
+				} 
+				float kon = pro.getBindingRate(k);
+				float koff = pro.getReverseRate(k);
+				float qr = tf.getSecretionRate();
+				float kt = tf.getUnboundIntRate();
+				float ke = tf.getBoundIntRate();
+				float deltaR = deltaMicroSecs * ((-kon*unboundReceptors[i]*ligandConc)+(koff * boundReceptors[i])-(kt*unboundReceptors[i])+qr);
+				float deltaC = deltaMicroSecs * ((kon*unboundReceptors[i]*ligandConc) - (koff * boundReceptors[i]) - (ke * boundReceptors[i]));
+				unboundReceptors[i] += deltaR;
+				boundReceptors[i] += deltaC;
+				if (unboundReceptors[i] < 0){
+					unboundReceptors[i] = 0;
+				}
+				if (boundReceptors[i] < 0){
+					boundReceptors[i] = 0;
+				}
+			}
+				
+		}
+	}
+	
+	public void makeBond(int proId, float numMolecules){
+		//Remove molecules from unbound and add to bound
+		for (int i = 0; i < receptorIds.length; i++){
+			if (receptorIds[i] == proId){
+				unboundReceptors[i] -= numMolecules;
+				boundReceptors[i] += numMolecules;
+				return;
 			}
 		}
 	}
 	
-	public void makeBond(long numMolecules){
-		
+	public void removeBond(int proId, float numMolecules){
+		//Remove molecules from bound and add to unbound
+		for (int i = 0; i < receptorIds.length; i++){
+			if (receptorIds[i] == proId){
+				unboundReceptors[i] += numMolecules;
+				boundReceptors[i] -= numMolecules;
+				return;
+			}
+		}
 	}
 	
 	public int getID(){
@@ -162,7 +227,7 @@ public class SurfaceSegment {
 	}
 	
 	public String getFinalOutput(){
-		return "";
+		return myId + "\t";
 	}
 
 }

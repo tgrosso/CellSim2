@@ -24,6 +24,7 @@ package cellSim2;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 
 import javax.vecmath.Vector3f;
 import javax.vecmath.Matrix3f;
@@ -64,6 +65,8 @@ public class Cell implements SimObject{
 	protected String objectType = "Cell";
 	protected boolean bound = false;
 	protected HashMap<Integer, TraffickingInfo> traffickRates;
+	protected HashSet<Integer> surfaceProteins;
+	protected HashSet<Integer> receptorsBindTo;
 	
 	protected int baseProb = 40; //% probability that molecule will bind
 	//protected int currentProb = baseProb; //For Uniform response, the probability that molecule will bind to the whole cell
@@ -104,6 +107,8 @@ public class Cell implements SimObject{
 		}
 		
 		traffickRates = new HashMap<Integer, TraffickingInfo>();
+		surfaceProteins = new HashSet<Integer>();
+		receptorsBindTo = new HashSet<Integer>();
 	}
 	
 	public void updateObject(){
@@ -196,6 +201,10 @@ public class Cell implements SimObject{
 	
 	public Vector3f getColor3Vector(){
 		return new Vector3f(cellColor[0], cellColor[1], cellColor[2]);
+	}
+	
+	public Gradient getGradient(int pro){
+		return sim.getGradient(pro);
 	}
 	
 	public void setVisible(boolean v){
@@ -292,6 +301,14 @@ public class Cell implements SimObject{
 		return boundProtein;
 	}
 	
+	public HashSet<Integer> getSurfaceProteins(){
+		return surfaceProteins;
+	}
+	
+	public HashSet<Integer> getReceptorsBindTo(){
+		return receptorsBindTo;
+	}
+	
 	public void setOutputFile(BufferedWriter bw){
 		outputFile = bw;
 	}
@@ -310,6 +327,14 @@ public class Cell implements SimObject{
 	
 	public Protein getProtein(int id){
 		return sim.getProtein(id);
+	}
+	
+	public boolean collidedWith(SimObject o){
+		return false;
+	}
+	
+	public void clearCollisions(){
+		
 	}
 
 }

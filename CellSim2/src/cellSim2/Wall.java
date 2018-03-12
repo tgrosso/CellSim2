@@ -24,6 +24,7 @@ import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.collision.shapes.BoxShape;
 import com.bulletphysics.demos.opengl.IGL;
 import com.bulletphysics.linearmath.Transform;
+import com.bulletphysics.util.ObjectArrayList;
 import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
 
@@ -32,6 +33,7 @@ import java.io.IOException;
 import java.nio.FloatBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 
 import javax.vecmath.Vector3f;
 
@@ -50,6 +52,7 @@ public class Wall implements SimObject{
 	protected float[] wallColor = {0.9f, 0.9f, 0.9f, 1f}; //bare wall is very light gray
 	//protected float width, height, depth;
 	protected static FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
+	protected ObjectArrayList<SimObject> collidedObjects;
 
 	protected boolean visible = true;
 	protected float[] glMat = new float[16];
@@ -57,6 +60,7 @@ public class Wall implements SimObject{
 									{{0, 0, 1}, {2, 0, 2}}, {{0, 1, 1}, {2, 0, 2}},
 									{{0, 0, 1}, {1, 2, 1}}, {{1, 0, 1}, {1, 2, 1}}};
 	protected float[][] drawingVectors;
+	protected Vector3f[] normals;
 	
 	protected boolean toRemove = false;
 	protected int id;
@@ -64,6 +68,9 @@ public class Wall implements SimObject{
 	protected boolean bound = false;
 	protected static boolean finalWritten = false;
 	protected SurfaceSegment[] segments;
+	protected HashSet<Integer> surfaceProteins;
+	protected HashSet<Integer> receptorsBindTo;
+	
 	protected int visibleProtein = -1;
 	protected float[] visibleColor;
 	//protected float distanceFromSource = 0f;
@@ -89,6 +96,8 @@ public class Wall implements SimObject{
 		
 		lastUpdate =  sim.getCurrentTimeMicroseconds();
 		segments = new SurfaceSegment[0];
+		surfaceProteins = new HashSet<Integer>();
+		receptorsBindTo = new HashSet<Integer>();
 		
 		//Set up the start and end vectors for each surface
 		drawingVectors = new float[2][3];
@@ -99,18 +108,28 @@ public class Wall implements SimObject{
 		drawingVectors[1][1] = o.y - h/2;
 		drawingVectors[1][2] = o.z + d/2;
 		
+		normals = new Vector3f[6];
+		normals[FRONT] = new Vector3f(0, 0, -1);
+		normals[BACK] = new Vector3f(0, 0, 1);
+		normals[TOP] = new Vector3f(0, 1, 0);
+		normals[BOTTOM] = new Vector3f(0, -1, 0);
+		normals[LEFT] = new Vector3f(1, 0, 0);
+		normals[RIGHT] = new Vector3f(-1, 0, 0);
+		
 		this.id = wall_ids;
 		wall_ids++;
 		
-		System.out.println("wall number " + id);
+		//System.out.println("wall number " + id);
 		
-		System.out.println("Start point: " + drawingVectors[0][0] + ", " + drawingVectors[0][1] + ", " + drawingVectors[0][2]);
-		System.out.println("End point: " + drawingVectors[1][0] + ", " + drawingVectors[1][1] + ", " + drawingVectors[1][2]);
+		//System.out.println("Start point: " + drawingVectors[0][0] + ", " + drawingVectors[0][1] + ", " + drawingVectors[0][2]);
+		//System.out.println("End point: " + drawingVectors[1][0] + ", " + drawingVectors[1][1] + ", " + drawingVectors[1][2]);
 		
 		Vector3f min = new Vector3f();
 		Vector3f max = new Vector3f();
 		body.getAabb(min, max);
-		System.out.println("Min: " + min.toString() + " max: " + max.toString()) ;
+		//System.out.println("Min: " + min.toString() + " max: " + max.toString()) ;
+		
+		collidedObjects = new ObjectArrayList<SimObject>();
 	}
 	
 	public CollisionShape getCollisionShape(){
@@ -121,10 +140,26 @@ public class Wall implements SimObject{
 		return body;
 	}
 	
-	public SurfaceSegment getSurfaceSegment(int s){
-		return segments[s];
+	public SurfaceSegment getSurfaceSegment(int surface){
+		if (segments.length == 0){
+			return null;
+		}
+		for (int i = 0; i < segments.length; i++){
+			if (segments[i].getID() == surface){
+				return segments[i];
+			}
+		}
+		return null;
 	}
 	
+	public HashSet<Integer> getSurfaceProteins(){
+		return surfaceProteins;
+	}
+	
+	public HashSet<Integer> getReceptorsBindTo(){
+		//Which proteins will bind to the coating receptors?
+		return receptorsBindTo;
+	}
 	
 	public TraffickingInfo getTraffickInfo(int pro, int id){
 		//Walls don't traffick. Return zero values
@@ -138,36 +173,113 @@ public class Wall implements SimObject{
 			System.err.println("Cannot coat wall " + id + " with protein. Surface value not valid: " + surface);
 			return;
 		}
-		SurfaceSegment seg = new SurfaceSegment(this, surface);
 		//Find the number of proteins
-		float surfaceArea = -1f;
-		switch (surface){
-			case 0:
-			case 1://FRONT or BACK - area is width * height
-				surfaceArea = size.x * size.y;
-			case 2:
-			case 3: //TOP or BOTTOM - area is width * depth
-				surfaceArea = size.x * size.z;
-			default: //LEFT or RIGHT - area is height * depth
-				surfaceArea = size.y * size.z;
-		}
-		SurfaceSegment[] newSegments = new SurfaceSegment[segments.length+1];
-		for (int i = 0; i < segments.length; i++){
-			if (segments[i].getID() == surface){
-				//Don't add another segment - just add this protein to the segment
-				segments[i].addReceptor(proId, surfaceConc*surfaceArea);
-				break;
-			}
-			newSegments[i] = segments[i];
-		}
-		seg.addReceptor(proId, surfaceConc*surfaceArea);
-		newSegments[segments.length] = seg;
 		//If this is the first protein, it is, by default, the visible one
 		if (segments.length == 0){
 			visibleProtein = proId;
 			visibleColor = sim.getProtein(proId).getColor();
 		}
-		segments = newSegments;
+		float surfaceArea = getSurfaceArea(surface);
+		boolean surfaceHasSegment = false;
+		for (int i = 0; i < segments.length; i++){
+			if (segments[i].getID() == surface){
+				//Don't add another segment - just add this protein to the segment
+				segments[i].addReceptor(proId, surfaceConc*surfaceArea);
+				surfaceHasSegment = true;
+				break;
+			}
+		}
+		if (!surfaceHasSegment){
+			SurfaceSegment seg = new SurfaceSegment(this, surface);
+			SurfaceSegment[] newSegments = new SurfaceSegment[segments.length+1];
+			//We don't already have a segment on that surface - make a new one
+			for (int i = 0; i < segments.length; i++){
+				newSegments[i] = segments[i];
+			}
+			seg.addReceptor(proId, surfaceConc*surfaceArea);
+			newSegments[segments.length] = seg;
+			segments = newSegments;
+		}
+		//Add any ligands for this protein to the ligand list
+		int[] lig = sim.getProtein(proId).getLigands();
+		for (int i = 0; i < lig.length; i++){
+			receptorsBindTo.add(new Integer(lig[i]));
+		}
+		surfaceProteins.add(new Integer(proId));
+	}
+	
+	public float getSurfaceArea(int surface){
+		switch (surface){
+		case 0:
+		case 1://FRONT or BACK - area is width * height
+			return size.x * size.y;
+		case 2:
+		case 3: //TOP or BOTTOM - area is width * depth
+			return size.x * size.z;
+		default: //LEFT or RIGHT - area is height * depth
+			return size.y * size.z;
+		}
+	}
+	
+	public Gradient getGradient(int pro){
+		return sim.getGradient(pro);
+	}
+	
+	public Vector3f getNormal(int surface){
+		return normals[surface];
+	}
+	public Vector3f[] getWorldCoordinates(int surface){
+		Vector3f[] vertices = new Vector3f[4];
+		switch(surface){
+		case 0:
+			//FRONT
+			vertices[0] = new Vector3f(size.x/2, size.y/2, -size.z/2);
+			vertices[1] = new Vector3f(-size.x/2, size.y/2, -size.z/2);
+			vertices[2] = new Vector3f(-size.x/2, -size.y/2, -size.z/2);
+			vertices[3] = new Vector3f(size.x/2, -size.y/2, -size.z/2);
+			break;
+		case 1:
+			//BACK
+			vertices[0] = new Vector3f(size.x/2, size.y/2, size.z/2);
+			vertices[1] = new Vector3f(-size.x/2, size.y/2, size.z/2);
+			vertices[2] = new Vector3f(-size.x/2, -size.y/2, size.z/2);
+			vertices[3] = new Vector3f(size.x/2, -size.y/2, size.z/2);
+			break;
+		case 2:
+			//TOP
+			vertices[0] = new Vector3f(size.x/2, size.y/2, size.z/2);
+			vertices[1] = new Vector3f(-size.x/2, size.y/2, size.z/2);
+			vertices[2] = new Vector3f(-size.x/2, size.y/2, -size.z/2);
+			vertices[3] = new Vector3f(size.x/2, size.y/2, -size.z/2);
+			break;
+		case 3:
+			//BOTTOM
+			vertices[0] = new Vector3f(size.x/2, -size.y/2, size.z/2);
+			vertices[1] = new Vector3f(-size.x/2, -size.y/2, size.z/2);
+			vertices[2] = new Vector3f(-size.x/2, -size.y/2, -size.z/2);
+			vertices[3] = new Vector3f(size.x/2, -size.y/2, -size.z/2);
+			break;
+		case 4:
+			//LEFT
+			vertices[0] = new Vector3f(size.x/2, size.y/2, size.z/2);
+			vertices[1] = new Vector3f(size.x/2, size.y/2, -size.z/2);
+			vertices[2] = new Vector3f(size.x/2, -size.y/2, -size.z/2);
+			vertices[3] = new Vector3f(size.x/2, -size.y/2, size.z/2);
+			break;
+		default:
+			//RIGHT
+			vertices[0] = new Vector3f(-size.x/2, size.y/2, size.z/2);
+			vertices[1] = new Vector3f(-size.x/2, size.y/2, -size.z/2);
+			vertices[2] = new Vector3f(-size.x/2, -size.y/2, -size.z/2);
+			vertices[3] = new Vector3f(-size.x/2, -size.y/2, size.z/2);
+		}
+		Transform myTrans = new Transform();
+		body.getMotionState().getWorldTransform(myTrans);
+		for (int i = 0; i < 4; i++){
+			myTrans.transform(vertices[i]);
+			//System.out.println("Wall Vertices (" + surface + "): " + vertices[i].toString());
+		}
+		return vertices;
 	}
 	
 	public int getVisibleProtein(){
@@ -188,12 +300,10 @@ public class Wall implements SimObject{
 		//TODO The frequency of wall updates should be a user parameter
 		long deltaTime = sim.getCurrentTimeMicroseconds() - lastUpdate;
 		if (deltaTime > updateTime){
-			//update the proteins
-			//convert the time to minutes
-			float minutes = deltaTime / 1000000 / 60f;
+			//update the segments
 			if (segments != null){
 				for (int i = 0; i < segments.length; i++){
-					segments[i].update(minutes);
+					segments[i].update(sim.getCurrentTimeMicroseconds(), deltaTime, new Vector3f());
 				}
 			}
 			lastUpdate = sim.getCurrentTimeMicroseconds();
@@ -264,15 +374,24 @@ public class Wall implements SimObject{
 	}
 	
 	public void collided(SimObject c, ManifoldPoint pt, long collId){
-		
-		//check out the proteins that are bound to this wall
-		//Does the object have proteins that bind to these proteins?
-		//If so, has the other body made bonds yet?
-		//If yes, confirm all the bonds.
-		//If not, have the other body make bonds?
+		//Walls don't do collisions. The other object will collide with the wall
+	}
+	
+	public boolean collidedWith(SimObject s){
+		if (collidedObjects.indexOf(s) == -1){
+			collidedObjects.add(s);
+			return false;
+		}
+		return true;
+	}
+	
+	public void clearCollisions(){
+		collidedObjects = new ObjectArrayList<SimObject>();
 	}
 	
 	public boolean specialRender(IGL gl, Transform t){
+		return false;
+		/*
 		//System.out.println("Wall id: " + id + " segments: " + segments.length + " protein id " + visibleProtein);
 		if (segments.length == 0 || visibleProtein < 0){
 			//No proteins or no visible protein - Just color it as is.
@@ -291,7 +410,7 @@ public class Wall implements SimObject{
 		}
 		//So this wall has at least one segment with the visible protein on it
 		//Now we need a special render
-		
+		/*
 		float[][] boxColors = new float[6][];
 		//set all walls to base color
 		for (int i = 0; i < 6; i++){
@@ -314,8 +433,9 @@ public class Wall implements SimObject{
 		
 		t.getOpenGLMatrix(glMat);
 		gl.glMultMatrix(glMat);
-		GL11.glNormal3f( 0f, 0f, -1f); 
-		System.out.println("Drawing wall number: " + id);
+		GL11.glNormal3f( 0f, 1f, 0f); 
+
+		//System.out.println("Drawing wall number: " + id);
 		for (int surf = 0; surf < 6; surf++){
 			//Set the color
 			
@@ -323,10 +443,13 @@ public class Wall implements SimObject{
 			GL11.glColor3f(boxColors[surf][0], boxColors[surf][1], boxColors[surf][2]);
 			
 			//Get the initial point
+			//System.out.println("Suface: "+ surf);
 			int[] vec = new int[3];
 			for (int i = 0; i < 3; i++){
 				vec[i] = pointVec[surf][0][i];
+				//System.out.print("\t"+vec[i] + "\t");
 			}
+			//System.out.println("");
 			GL11.glVertex3f(drawingVectors[vec[0]][0], drawingVectors[vec[1]][1], drawingVectors[vec[2]][2]);
 			//System.out.println(drawingVectors[vec[0]][0]+ ", " + drawingVectors[vec[1]][1] + ", " + drawingVectors[vec[2]][2]);
 			//Make the next three points
@@ -341,6 +464,7 @@ public class Wall implements SimObject{
 		}
 		gl.glPopMatrix();
 		return true;
+		*/
 	}
 	
 	public int getID(){
@@ -391,6 +515,29 @@ public class Wall implements SimObject{
 	
 	public Protein getProtein(int id){
 		return sim.getProtein(id);
+	}
+	
+	public int getSurface(Vector3f v){
+		//v is a point on the surface of the wall
+		//It's the top if y >= height/2  
+		if (v.y >= size.y/2){
+			return TOP;
+		}
+		else if (v.y <= -size.y/2){
+			return BOTTOM;
+		}
+		else if (v.x >= size.x/2){
+			return LEFT;
+		}
+		else if (v.x <= -size.x/2){
+			return RIGHT;
+		}
+		else if (v.z >= size.z/2){
+			return BACK;
+		}
+		else{
+			return FRONT;
+		}
 	}
 	
 	public boolean showingBoundProtein(){

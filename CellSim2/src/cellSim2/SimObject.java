@@ -25,6 +25,7 @@ import com.bulletphysics.demos.opengl.IGL;
 import com.bulletphysics.linearmath.Transform;
 import javax.vecmath.Vector3f;
 import java.io.BufferedWriter;
+import java.util.HashSet;
 
 
 public interface SimObject {
@@ -54,5 +55,10 @@ public interface SimObject {
 		public int getVisibleProtein();
 		public boolean showingBoundProtein();
 		public Protein getProtein(int id);
+		public HashSet<Integer> getSurfaceProteins();
+		public HashSet<Integer> getReceptorsBindTo();
+		public boolean collidedWith(SimObject s);
+		public void clearCollisions();
+		public Gradient getGradient(int protein);
 
 }
