@@ -313,6 +313,10 @@ public class Cell implements SimObject{
 		outputFile = bw;
 	}
 	
+	public String getSurfaceSegmentOutput(){
+		return "";
+	}
+	
 	public String finalOutput(){
 		if (finalWritten){
 			return "";
@@ -335,6 +339,10 @@ public class Cell implements SimObject{
 	
 	public void clearCollisions(){
 		
+	}
+	
+	public boolean isMobile(){
+		return true;
 	}
 
 }

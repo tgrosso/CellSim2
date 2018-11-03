@@ -92,6 +92,7 @@ public class Wall implements SimObject{
 		wallShape = new BoxShape(new Vector3f(w/2, h/2, d/2));
 		DefaultMotionState motionState = new DefaultMotionState(t);
 		RigidBodyConstructionInfo rbInfo = new RigidBodyConstructionInfo(mass, motionState, wallShape, localInertia);
+		//System.out.println("Wall friction: " + rbInfo.friction);
 		body = new SimRigidBody(rbInfo, this);
 		
 		lastUpdate =  sim.getCurrentTimeMicroseconds();
@@ -360,7 +361,7 @@ public class Wall implements SimObject{
 		String s = "";
 		for (int i = 0; i < segments.length; i++){
 			s = s + sim.getFormattedTime() + "\t" + this.id + "\t";
-			s = s + segments[i].getOutput();;
+			s = s + segments[i].getOutput(sim);;
 		}
 		return s;
 	}
@@ -499,6 +500,10 @@ public class Wall implements SimObject{
 		return toRemove;
 	}
 	
+	public boolean isMobile(){
+		return false;
+	}
+	
 	public boolean isBound(){
 		//TODO might not need this anymore
 		return bound;
@@ -544,6 +549,14 @@ public class Wall implements SimObject{
 		return false;
 	}
 	
+	public String getSurfaceSegmentOutput(){
+		String s = "";
+		for (int i = 0; i < segments.length; i++){
+			s += segments[i].getOutput(sim);
+		}
+		return s;
+	}
+	
 	public void setOutputFile(BufferedWriter bw){
 		outputFile = bw;
 		//System.out.println("I am wall number: " + id + " and my outputfile is " + outputFile.toString());
@@ -557,7 +570,7 @@ public class Wall implements SimObject{
 		if (outputFile != null && segments != null && segments.length > 0){
 			//"Time Since Sim Start\tWall ID\tProtein\tSurface Concentration\n";
 			for (int i = 0; i < segments.length; i++){
-				String s = sim.getFormattedTime() + "\t" + getID() + "\t" + segments[i].getOutput()+ "\n";
+				String s = sim.getFormattedTime() + "\t" + getID() + "\t" + segments[i].getOutput(sim)+ "\n";
 				try{
 					outputFile.write(s);
 				}

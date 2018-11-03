@@ -48,6 +48,8 @@ public class Defaults {
 		defaults.put("secBetweenOutput", new String[]{".5"});
 		defaults.put("secBetweenImages", new String[]{"1"});
 		defaults.put("speedUp", new String[]{"1"});
+		defaults.put("startX", new String[]{"0"});
+		defaults.put("molsPerBond", new String[]{"100"});
 	}
 	
 	private static final HashMap<String, String> cellDefaults = new HashMap<String, String>();

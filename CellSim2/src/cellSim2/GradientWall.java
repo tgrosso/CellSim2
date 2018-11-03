@@ -37,11 +37,11 @@ public class GradientWall extends Wall {
 	public GradientWall(Simulation s, float w, float h, float d, Vector3f o, Gradient g) {
 		super(s, w, h, d, o);
 		grad = g;
-		drawnSegments = 200;
+		drawnSegments = 100;
 		if (w < drawnSegments){
 			drawnSegments = (int)w;
 		}
-		System.out.println("Size: " + size + " origin: " + origin);
+		//System.out.println("Size: " + size + " origin: " + origin);
 		//startPoint = new Vector3f(-(float)(size.x/2.0)+o.x, (float)(size.y/2.0)+o.y, (float)(size.z/2.0)+o.z);
 		startPoint = new Vector3f(-(float)(size.x/2.0)+o.x, (float)(size.y/2.0)+o.y, (float)(size.z/2.0));
 		//System.out.println(this.id);

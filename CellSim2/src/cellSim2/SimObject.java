@@ -31,6 +31,7 @@ import java.util.HashSet;
 public interface SimObject {
 		
 		public void collided(SimObject c, ManifoldPoint mp, long collID);
+		public boolean isMobile();
 		public CollisionShape getCollisionShape();
 		public SimRigidBody getRigidBody();
 		public void updateObject();
@@ -51,6 +52,7 @@ public interface SimObject {
 		public void wrapup();
 		public void setOutputFile(BufferedWriter bw);
 		public void writeOutput();
+		public String getSurfaceSegmentOutput();
 		public TraffickingInfo getTraffickInfo(int protein, int id);
 		public int getVisibleProtein();
 		public boolean showingBoundProtein();

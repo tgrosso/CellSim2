@@ -46,7 +46,7 @@ public class Protein {
 	private float[] bondLengths;
 	private float[] bondLifetimes;
 	private float[] color;
-	public static int MOLS_PER_BOND = 5;
+	public static int MOLS_PER_BOND = 100;
 
 	/**
 	 * A class to represent a protein in simulation
@@ -152,6 +152,10 @@ public class Protein {
 		isr.close();
 		fis.close();
 	}
+	
+	public static void setMolsPerBond(int m){
+		MOLS_PER_BOND = m;
+	}
 
 	public String getName(){
 		return name;
@@ -221,6 +225,7 @@ public class Protein {
 	public void setLigands(SimGenerator sim){
 		//Takes the ligand info that was read in, checks that the other proteins exist
 		//and imports the data
+		//System.out.println("Setting ligands for " + name);
 		for (int i = 0; i < ligandInfo.length; i++){
 			//get the name of the protein
 			String [] info = ligandInfo[i];

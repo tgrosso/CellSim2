@@ -87,6 +87,7 @@ public class TestRunner {
 	    if (!outputDir.exists() || !outputDir.isDirectory()){
 	    	System.err.println("Cannot write to Param File Directory!");
 	    	System.err.println("Cannot continue without space for output");
+	    	System.err.println("Looking for dir:" + outputDir.toString());
 	    	System.exit(2);
 	    }
 	    
@@ -250,9 +251,19 @@ public class TestRunner {
 						System.err.println("Input was: " + line);
 						continue;
 					}
-					if (paramVar[0] == "protein"){
+					if (paramVar[0].equals("protein")){
+						//The first param value will be protein type
+						//All remaining will be files describing the different versions
+						//So no problem add it to the list, it's an issue of reading
+						String param = paramVar[0] + "\t" + paramVar[1]; //i.e. protein<tab>ProName
+						String[] values = Arrays.copyOfRange(paramVar,  2,  paramVar.length);
+						//System.out.println("Reading in protein parameters: ");
+						//System.out.println("param: " + param);
+						for (int k = 0; k < values.length; k++){
+							//System.out.println("\t" + values[k]);
+						}
+						paramMap.put(param,  values);
 						continue;
-						//TODO Right now proteins can't be testing values!
 					}
 					if (paramVar[0].equals("cell")){
 						//The first param value will be cell type
@@ -323,16 +334,21 @@ public class TestRunner {
 	    	}
 	    	executor.shutdown();
 	    	try{
-				boolean finished = executor.awaitTermination(60, TimeUnit.MINUTES);
+				boolean finished = executor.awaitTermination(3600, TimeUnit.MINUTES);
 				if (finished){
 					System.out.println("Threads completed");
 				}
 				else{
 					System.out.println("Timeout happened first!");
+					System.out.println("Shutting down thread");
+					executor.shutdownNow();
+					if (!executor.awaitTermination(10, TimeUnit.MINUTES)){
+						System.err.println("Terimination not complete! You may want to manually shut down.");
+					}
 				}
 			}
 			catch(InterruptedException e){
-				System.out.println(e.toString());
+				System.err.println(e.toString());
 			}	    	
 	    	generators.clear();
 	    	dirNames.clear();
@@ -355,7 +371,8 @@ public class TestRunner {
 				//TODO Unit test - value_ids should not be null here
 				//System.out.print(params[i] + ": " + val + " ");
 				String var = params[i];
-				if (params[i].startsWith("cell")){
+				//TODO This should be generalized for any parameter like this
+				if (params[i].startsWith("cell") || params[i].startsWith("protein")){
 					//The value will be a Filename. Need the end of that filename
 					File f = new File(val);
 					val = f.getName();
@@ -389,6 +406,7 @@ public class TestRunner {
 			//substituting these parameter values
 			String fileName = "inputFile.txt";
 			File infile = new File(paramDir, fileName);
+			//System.out.println(infile.toString());
 			if (runNum == 0){
 				try{
 					PrintWriter pw = new PrintWriter(infile);
@@ -414,7 +432,9 @@ public class TestRunner {
 					for(Entry<String, String> e : proteinMap.entrySet()) {
 				        String var = e.getKey();
 				        String val = e.getValue();
-				        pw.println("protein\t" + var + "\t" + val);
+				        if (!paramMap.containsKey("protein\t" + var)){
+				        	pw.println("protein\t" + var + "\t" + val);
+				        }
 				   
 				    }
 					//Now the cells
@@ -505,6 +525,10 @@ class GeneratorThread implements Runnable{
 		command.add(infile);
 		command.add(outfile);
 	}
+	
+	public String getOutfile(){
+		return outfile;
+	}
 		
 	public void run(){
 		ProcessBuilder pb = new ProcessBuilder(command);
@@ -512,7 +536,7 @@ class GeneratorThread implements Runnable{
 		try{
 			Process p = pb.start();
 			int outcome = p.waitFor();
-			System.out.println("Process complete. Outcome: " + outcome);
+			System.out.println("Process complete. Outcome: " + outcome + " - " + getOutfile());
 		}
 		catch(IOException e){
 			System.err.println(e.toString());

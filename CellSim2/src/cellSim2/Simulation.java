@@ -60,6 +60,7 @@ import javax.vecmath.Vector3f;
 import static com.bulletphysics.demos.opengl.IGL.*;
 
 public class Simulation extends DemoApplication{
+	private int MAX_CONSTRAINTS = 40000;
 	
 	private CollisionDispatcher dispatcher;
 	private DefaultCollisionConfiguration collisionConfiguration;
@@ -76,14 +77,15 @@ public class Simulation extends DemoApplication{
 	private ImageGenerator imageGen;
 	private boolean render = true, finished = false;
 	private SimGenerator simValues;
-	private long oldTime, currentTime, startTime, clockTime, lastDataOutput, deltaTime;
+	//private long oldTime, currentTime, startTime, clockTime, lastDataOutput, deltaTime;
+	private long realCurrentTime, realDeltaTime, realStartTime, simCurrentTime, simDeltaTime, simStartTime, lastDataOutput, delayTime;
 	private float averageDeltaTime;
 	private long numFrames;
 	private SimObject[][] processedCollisions;
 	
 	private Random random;
 	
-	private BufferedWriter logFile, cellData, wallData, gradientTestFile, constraintFile;
+	private BufferedWriter logFile, cellData, wallData, gradientTestFile, constraintFile, segmentData;
 	private ObjectArrayList<BufferedWriter> gradientDataFiles;
 	
 	int testWidth;
@@ -94,15 +96,19 @@ public class Simulation extends DemoApplication{
 		modelObjects = new ObjectArrayList<SimObject>();
 		constraints = new ObjectArrayList<BondConstraint>();
 		//startTime is the underlying clock time. clockTime - startTime = currentTime
-		startTime = clock.getTimeMicroseconds();
-		oldTime = startTime;
-		clockTime = startTime;
+		realStartTime = clock.getTimeMicroseconds();
+		realCurrentTime = realStartTime;
 		//current time is microseconds since start of simulation
-		currentTime = clockTime - startTime;
-		deltaTime = 0L;
+		realDeltaTime = 0L;
 		lastDataOutput = -1;
 		averageDeltaTime = 0f;
 		numFrames = 0;
+		delayTime = 4 * 1000000;
+		
+		simCurrentTime = realStartTime;
+		simDeltaTime = (long)(1000000/60f) * simValues.speedUp;
+		simStartTime = realCurrentTime;
+		
 		
 		//TODO ImageGenerator is just a stub right now
 		imageGen = new ImageGenerator();
@@ -135,13 +141,30 @@ public class Simulation extends DemoApplication{
 			gradientTestFile.write(str);
 			constraintFile = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "constraintData.csv")));
 			constraintFile.write(BondConstraint.getDataHeaders());
+			segmentData = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "segmentData.csv")));
+			segmentData.write("Time Since Start\tParent Object\tSegment ID\tProtein\tUnbound Receptors\tBound Receptors\n");
 		}
 		catch (IOException e){
 			System.err.println("Cannot generate output files!");
 		}
-		writeToLog(getFormattedTime() + "\tInitialization Complete");
+		
 		BulletGlobals.setContactAddedCallback(new SimContactAddedCallback());
 		processedCollisions = new SimObject [0][2];
+		writeToLog(getFormattedTime() + "\tInitialization Complete");
+		
+		//Shit - Why am I doing this?
+		//TODO Figure out what I am doing this!!
+		/*
+		Protein integ = getProtein(getProteinId("Integrin"));
+		int lam = getProteinId("Laminin");
+		int[] ids = integ.getLigands();
+		for (int i = 0; i < ids.length; i++){
+			if (ids[i] == lam){
+				//System.out.println("Integrin/Laminin Bond Length " + integ.getBondLength(i));
+			}
+		}*/
+			
+		
 	}
 	
 	@Override
@@ -162,7 +185,7 @@ public class Simulation extends DemoApplication{
 
 		//Simulation takes place in fluid.  Gravity is set for individual cells
 		dynamicsWorld.setGravity(new Vector3f(0f, 0f, 0f));
-		
+		clientResetScene();
 		simValues.createWalls(this);
 		//writeToLog(getFormattedTime() + "\tWalls created");
 		//writeToLog(getFormattedTime() + "\t" +simValues.simMax[0] + "," + simValues.simMax[1] + "," + simValues.simMax[2]);
@@ -173,7 +196,7 @@ public class Simulation extends DemoApplication{
 			GImpactCollisionAlgorithm.registerAlgorithm(dispatcher);
 		}
 		
-		clientResetScene();
+		
 		writeToLog(getFormattedTime() + "\tFinished Init Physics");
 	}
 		
@@ -191,68 +214,101 @@ public class Simulation extends DemoApplication{
 	
 	@Override
 	public void clientMoveAndDisplay() {
-		float secSinceOutput = (float)((currentTime - lastDataOutput)/(1.0e6));
-		if (lastDataOutput < 0 || secSinceOutput >= simValues.secBetweenOutput){
+		
+		float secSinceOutput = (float)((simCurrentTime - lastDataOutput)/(1.0e6));
+		if (simCurrentTime > delayTime && (lastDataOutput < 0 || secSinceOutput >= simValues.secBetweenOutput)){
 			outputData();
-			lastDataOutput = currentTime;
+			lastDataOutput = simCurrentTime;
 		}
 		int numObjects = modelObjects.size();
-		if (numObjects == 0){
-			//if all objects have left the vessel, stop the simulation
-			finished = true;
-		}
+		
+		boolean mobileObjs = false;
+		//Vector3f testVec = new Vector3f();
 		for (int i = 0; i < numObjects; i++){
 			SimObject bioObj = modelObjects.getQuick(i);
+			/*
+			if (bioObj.getType().equals("Segmented Cell")){
+				SimRigidBody b = bioObj.getRigidBody();
+				b.getCenterOfMassPosition(testVec);
+				System.out.println(getFormattedTime() + " COM Pos before update: " + testVec.toString());
+				//b.getLinearVelocity(testVec);
+				//System.out.println(getFormattedTime() + " linV before update: " + testVec.toString());
+			}*/
 			bioObj.updateObject();
+			/*
+			if (bioObj.getType().equals("Segmented Cell")){
+				SimRigidBody b = bioObj.getRigidBody();
+				b.getCenterOfMassPosition(testVec);
+				System.out.println("COM Pos after update: " + testVec.toString());
+				//b.getLinearVelocity(testVec);
+				//System.out.println(getFormattedTime() + " linV after update: " + testVec.toString());
+			}*/
 			bioObj.clearCollisions();
+			if (bioObj.isMobile()){
+				mobileObjs = true;
+			}
+		}
+		if (!mobileObjs){
+			finished = true;
 		}
 		
+		
 		int numConstraints = constraints.size();
+		//System.out.println("Num constraints " + numConstraints);
+		//int remConstraints = 0;
 		for (int i = numConstraints-1; i >=0; i--){
 			BondConstraint bc = constraints.getQuick(i);
 			bc.update();
 			if (!bc.isActive()){
 				removeConstraint(bc);
+				//remConstraints++;
 			}
 		}
-
+		//System.out.println("Removed: " + remConstraints + " constraints.");
 		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		
-		//long oldTime = clockTime;
-		clockTime = clock.getTimeMicroseconds();
-		long newTime = clockTime * simValues.speedUp;
-		deltaTime = newTime - oldTime;
-		currentTime = newTime - startTime;
-		oldTime = newTime;
+		long clockTime = clock.getTimeMicroseconds();
+		realDeltaTime = clockTime - realCurrentTime;
+		realCurrentTime = clockTime - realStartTime;
 		numFrames++;
-		averageDeltaTime = (averageDeltaTime * (numFrames-1) + deltaTime) / numFrames;
-
+		averageDeltaTime = (averageDeltaTime * (numFrames-1) + realDeltaTime) / numFrames;
+		
+		simCurrentTime = simCurrentTime + simDeltaTime;
+		
+		
 		// step the simulation
 		if (dynamicsWorld != null) {
 			//maxSubSteps * default frame rate (1/60) must be > time step
-			float time_step = deltaTime / 1000000f;
+			/*for (int i = 0; i < numObjects; i++){
+				SimObject bioObj = modelObjects.getQuick(i);
+				
+				if (bioObj.getType().equals("Segmented Cell")){
+					//System.out.print("object: " + bioObj.toString());
+					SimRigidBody b = bioObj.getRigidBody();
+					b.getCenterOfMassPosition(testVec);
+					System.out.println("COM Pos before step: " + testVec.toString());
+					//b.getLinearVelocity(testVec);
+					//System.out.println(getFormattedTime() + " linV before step: " + testVec.toString());
+				}
+			}*/
+			
+			float time_step = simDeltaTime / 1000000f;
 			int max_substeps = (int)Math.ceil(time_step * 60f);
 			dynamicsWorld.stepSimulation(time_step, max_substeps);
 			//System.out.println("Simulation stepped");
-			// optional but useful: debug drawing
-			dynamicsWorld.debugDrawWorld();
-			
-			//System.out.println("Simulation stepped");
-			/*
-			int numManifolds = dynamicsWorld.getDispatcher().getNumManifolds();
-			for (int i=0;i<numManifolds;i++){
-				//System.out.println(collisionID);
-				PersistentManifold contactManifold =  dynamicsWorld.getDispatcher().getManifoldByIndexInternal(i);
-				SimRigidBody objA = (SimRigidBody)contactManifold.getBody0();
-				SimRigidBody objB = (SimRigidBody)contactManifold.getBody1();
-				int numContacts = contactManifold.getNumContacts();
-				//System.out.println("Body A:" + objA.getParent().getType() + objA.getParent().getID()+ " Body B:" + objB.getParent().getType() + objB.getParent().getID());
-				for (int j = 0; j < numContacts;j++){
-					ManifoldPoint mp = contactManifold.getContactPoint(j);
-					//System.out.println("   " + "Point " + j + ": normalOnB: " + mp.normalWorldOnB.toString() + " point on A: " + mp.localPointA);
+			/*for (int i = 0; i < numObjects; i++){
+				SimObject bioObj = modelObjects.getQuick(i);
+				if (bioObj.getType().equals("Segmented Cell")){
+					SimRigidBody b = bioObj.getRigidBody();
+					b.getCenterOfMassPosition(testVec);
+					System.out.println("COM Pos after step: " + testVec.toString());
+					//bioObj.getRigidBody().getLinearVelocity(testVec);
+					//System.out.println(" linV after step: " + testVec.toString());
 				}
 			}*/
+			// optional but useful: debug drawing
+			dynamicsWorld.debugDrawWorld();
+
 		}
 		
 		//Remove any objects that have moved out of range 
@@ -276,13 +332,12 @@ public class Simulation extends DemoApplication{
 			if (!inside){
 				bioObj.writeOutput();
 				writeToLog(bioObj.finalOutput());
+				writeToLog(bioObj.toString() + " removed at " + getFormattedTime());
 				removeSimulationObject(bioObj);
 				bioObj.destroy();
 			}
 		}
 		
-		
-		//Check for collisions and do stuff
 
 		if (simValues.displayImages){
 			renderme();
@@ -291,7 +346,7 @@ public class Simulation extends DemoApplication{
 		}
 		
 		
-		if (currentTime >= simValues.endTime*1e6){
+		if (simCurrentTime >= simValues.endTime*1e6){
 			finished = true;
 		}
 	}
@@ -302,6 +357,7 @@ public class Simulation extends DemoApplication{
 		setCameraDistance(baseCameraDistance);
 		ele = 0f;
 		updateCamera();
+		writeToLog(getFormattedTime() + "\tMyInit Complete");
 	}
 	
 	@Override
@@ -322,7 +378,7 @@ public class Simulation extends DemoApplication{
 					}
 				}
 			}
-			
+			/*
 			gl.glBegin(GL_LINES);
 			gl.glColor3f(0f, 0f, 0f);
 			gl.glVertex3f(350, -45, 250);
@@ -342,7 +398,7 @@ public class Simulation extends DemoApplication{
 			
 			
 			gl.glEnable(GL_LIGHTING);
-			
+			*/
 			Transform ta = new Transform(), tb = new Transform();
 			int numConstraints = dynamicsWorld.getNumConstraints();
 			for (int i = 0; i < numConstraints; i++){
@@ -385,9 +441,14 @@ public class Simulation extends DemoApplication{
 		constraints.add(c);
 	}
 	
+	public boolean constraintAvailable(){
+		int num_constraints = constraints.capacity();
+		return (num_constraints < MAX_CONSTRAINTS);
+	}
+	
 	public void removeConstraint(BondConstraint c){
 		try{
-			constraintFile.write(c.finalOutput());
+			constraintFile.write(c.getOutput());
 		}
 		catch(IOException e){
 			System.err.println("Could not write to bond constraint file");
@@ -403,14 +464,39 @@ public class Simulation extends DemoApplication{
 		for (int i = 0; i < numObjects; i++){
 			SimObject bioObj = modelObjects.getQuick(i);
 			bioObj.writeOutput();
+			try{
+				segmentData.write(bioObj.getSurfaceSegmentOutput());
+			}
+			catch(IOException e){
+				System.err.println("Could not write Surface Segment data");
+			}
 		}
+		try{
+			constraintFile.flush();
+			segmentData.flush();
+			cellData.flush();
+		}
+		catch(IOException e){
+			System.err.println("Could not flush when writing data");
+		}
+		/*
+		int numConstraints = constraints.size();
+		for (int i = 0; i < numConstraints; i++){
+			BondConstraint bc = constraints.getQuick(i);
+			try{
+				constraintFile.write(bc.getOutput());
+			}
+			catch(IOException e){
+				System.err.println("Could not write constraint data.");
+			}
+		}*/
 		for (int i = 0; i < simValues.gradients.size(); i++){
 			Gradient g = simValues.gradients.get(i);
 			g.writeOutput(this);
 			//Debugging
 			String s = getFormattedTime() + "\t" + getProteinName(g.getProtein());
 			for (int j = 0; j < testWidth; j+=100){
-				s = s + "\t" + g.getConcentration(currentTime, new Vector3f(j, 0, 0));
+				s = s + "\t" + g.getConcentration(simCurrentTime, new Vector3f(j, 0, 0));
 			}
 			s += "\n";
 			try{
@@ -420,6 +506,7 @@ public class Simulation extends DemoApplication{
 				System.err.println("Could not write to gradient test file");
 			}
 		}
+		//writeToLog("Constraints\t" + constraints.size() + "\n");
 		
 	}
 	
@@ -466,13 +553,21 @@ public class Simulation extends DemoApplication{
 		return null;
 	}
 	
+	public float getDistanceFromSource(){
+		return simValues.distFromSource;
+	}
+	
+	public float getDistanceFromSource(float x){
+		return (x - simValues.startX + simValues.distFromSource);
+	}
+	
 	public long getCurrentTimeMicroseconds(){
-		return currentTime;
+		return simCurrentTime;
 	}
 	
 	@Override
 	public float getDeltaTimeMicroseconds(){
-		return (float)deltaTime;
+		return (float)simDeltaTime;
 	}
 	
 	public void setNeedsGImpact(boolean b){
@@ -488,7 +583,7 @@ public class Simulation extends DemoApplication{
 	}
 	
 	public String getFormattedTime(){
-		long millisec = currentTime / 1000;
+		long millisec = simCurrentTime / 1000;
 		long mil = millisec % 1000;
 		long sec = (millisec / 1000) % 60;
 		long min = (millisec / (1000 * 60)) % 60;
@@ -499,6 +594,10 @@ public class Simulation extends DemoApplication{
 	
 	public float getNextRandomF(){
 		return random.nextFloat();
+	}
+	
+	public boolean getNextRandomBool(){
+		return random.nextBoolean();
 	}
 	
 	public boolean readyToQuit(){
@@ -521,7 +620,7 @@ public class Simulation extends DemoApplication{
 	public void writeToLog(String s){
 		if (logFile != null){
 			try{
-				logFile.write(getFormattedTime() + ", " + s);
+				logFile.write(getFormattedTime() + "\t" + s);
 				logFile.newLine();
 				logFile.flush();
 			}
@@ -535,22 +634,32 @@ public class Simulation extends DemoApplication{
 	
 	
 	public void wrapUp(){
-		writeToLog("\n" + getFormattedTime() + ",Finishing Up");
-		writeToLog("Current time (microseconds)," + currentTime);
-		writeToLog("Actual clock time (microseconds)," + clock.getTimeMicroseconds());
-		writeToLog("Average frame time (microseconds), " + averageDeltaTime);
+		writeToLog("\n" + getFormattedTime() + "\tFinishing Up");
+		writeToLog("Current sim time (microseconds)\t" + simCurrentTime);
+		writeToLog("Actual clock time (real microseconds)\t" + clock.getTimeMicroseconds());
+		writeToLog("Average frame time (real microseconds)\t" + averageDeltaTime);
 		int numObjects = modelObjects.size();
 		for (int i = 0; i < numObjects; i++){
 			SimObject bioObj = modelObjects.getQuick(i);
 			writeToLog(bioObj.finalOutput());
+			try{
+				segmentData.write(bioObj.getSurfaceSegmentOutput());
+			}
+			catch(IOException e){
+				System.err.println("Could not write Surface Segment data");
+			}
 		}
 		
 		
 		try{
 			int numConstraints = constraints.size();
+			//writeToLog("Constraints\t"+numConstraints);
+			if (simCurrentTime < simValues.endTime*1e6){
+				writeToLog("Time Not Complete\t" + simCurrentTime);
+			}
 			for (int i = 0; i < numConstraints; i++){
 				BondConstraint bc = constraints.getQuick(i);
-				constraintFile.write(bc.finalOutput());
+				constraintFile.write(bc.getOutput());
 			}
 			constraintFile.flush();
 			constraintFile.close();
@@ -561,6 +670,8 @@ public class Simulation extends DemoApplication{
 			cellData.close();
 			wallData.flush();
 			wallData.close();
+			segmentData.flush();
+			segmentData.close();
 			
 			for (int i = 0; i < gradientDataFiles.size(); i++){
 				gradientDataFiles.get(i).flush();

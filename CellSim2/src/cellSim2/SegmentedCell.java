@@ -66,7 +66,7 @@ public class SegmentedCell implements SimObject{
 	
 	private BufferedWriter outputFile;
 	
-	private Vector3f origin, initialPosition, lastPosition;
+	private Vector3f origin, initialPosition, lastPosition, lastAV, lastDeltaAV, lastLV;
 	private float accumulatedDistance;
 	private float radius;
 	private float density = 1.01f;
@@ -94,7 +94,8 @@ public class SegmentedCell implements SimObject{
 	private static Vector3f aabbMax = new Vector3f(1e30f, 1e30f, 1e30f);
 	private static Vector3f aabbMin = new Vector3f(-1e30f, -1e30f, -1e30f);
 
-	
+	private long[] pos;
+	private long[] neg;
 
 	/**
 	 * Represents the basic cell that moves around in a simulation
@@ -113,9 +114,6 @@ public class SegmentedCell implements SimObject{
 		mass = density * volume;
 		detailLevel = dl;
 		surfaceArea = (float)(4 * Math.PI * r * r);
-		//maxAngVel = (float)(Math.PI/Math.pow(2, detailLevel));
-		//maxDeltaVel = (float)(Math.PI * 1800 * mass);
-		//System.out.println("Max Delta Vel: " + maxDeltaVel);
 		
 		trans = new Transform();
 		trans.setIdentity();
@@ -129,13 +127,19 @@ public class SegmentedCell implements SimObject{
 		
 		DefaultMotionState motionState = new DefaultMotionState(trans);
 		RigidBodyConstructionInfo rbInfo = new RigidBodyConstructionInfo(mass, motionState, cellShape, localInertia);
+		//System.out.println("Friction: " + rbInfo.friction);
 		body = new SimRigidBody(rbInfo, this);
+		//System.out.println(body.toString());
 		body.setCollisionFlags(CollisionFlags.CUSTOM_MATERIAL_CALLBACK);
 		numSegments = cellShape.getNumTriangles();
 		
 		float downForce = (mass * 9.8f) - (volume * 9.8f);
 		body.setGravity(new Vector3f(0, -downForce, 0));
-		//body.setAngularVelocity(getRandomVector(maxDeltaVel));
+		body.setAngularVelocity(getRandomVector(.1f));
+		lastAV = new Vector3f(0, 0, 0);
+		body.getAngularVelocity(lastAV);
+		lastLV = new Vector3f(0, 0, 0);
+		body.getLinearVelocity(lastLV);
 		hasReceptors = false;
 		
 		traffickRates = new HashMap<Integer, TraffickingInfo>();
@@ -171,11 +175,22 @@ public class SegmentedCell implements SimObject{
 		receptorsBindTo = new HashSet<Integer>();
 		
 		membraneSegments = new SurfaceSegment[numSegments];
+		for (int i = 0; i < numSegments; i++){
+			membraneSegments[i] = new SurfaceSegment(this, i);
+		}
 		
 		collidedObjects = new ObjectArrayList<SimObject>();
 		
 		sim.setNeedsGImpact(true);
 		sim.addSimulationObject(this);
+		//System.out.println("Cell added to simulation");
+		
+		pos = new long[3];
+		neg = new long[3];
+		for (int i = 0; i < 3; i++){
+			pos[i] = 0;
+			neg[i] = 0;
+		}
 	}
 	
 	public SegmentedCell(Simulation s, float r, int dl) {
@@ -183,17 +198,37 @@ public class SegmentedCell implements SimObject{
 	}
 	
 	public void setInitialPosition(Vector3f o){
-		this.origin = o;
-		initialPosition = new Vector3f(o);
-		lastPosition = new Vector3f(o);
-		accumulatedDistance = 0;
+		//System.out.println("Setting initial position");
+		body.getAngularVelocity(lastAV);
+		//System.out.println("Last AV: " + lastAV.toString());
+		body.getLinearVelocity(lastLV);
+		//System.out.println("Last LV: " + lastLV.toString());
 		
+		this.origin = new Vector3f(o);
 		trans.setIdentity();
 		trans.origin.set(this.origin);
-		
+	
 		DefaultMotionState motionState = new DefaultMotionState(trans);
 		body.setMotionState(motionState);
-		//System.out.println("my origin: " + this.origin.toString());
+		
+		motionState.getWorldTransform(trans);
+		initialPosition = new Vector3f(trans.origin);
+		//System.out.println("Initial position: " + initialPosition.toString());
+		this.body.getCenterOfMassPosition(initialPosition);
+		//System.out.println("Initial COM position: " + initialPosition.toString());
+		lastPosition = new Vector3f(trans.origin);
+		body.setAngularVelocity(lastAV);
+		body.setLinearVelocity(lastLV);
+		lastDeltaAV = new Vector3f();
+		accumulatedDistance = 0;
+		
+		//Vector3f testVec = new Vector3f();
+		//body.getAngularVelocity(testVec);
+		//System.out.println("Angular Vel after setting initial position: " + testVec.toString());
+		//body.getLinearVelocity(testVec);
+		//System.out.println("Linear Vel after setting initial position: " + testVec.toString());
+		
+		//System.out.println("my origin: " +initialPosition.toString() + " Dist to source: " + sim.getDistanceFromSource(initialPosition.x));
 	}
 	
 	public static ArrayList<SegmentedCell> readInFile(String type, String filename, Simulation sim){
@@ -204,6 +239,7 @@ public class SegmentedCell implements SimObject{
 		float density = 1.01f;
 		float volume = (float)(4.0/3.0 * Math.PI * radius * radius * radius);
 		float mass = density * volume;
+		//What the hell is this maxDeltaVel?
 		float maxDeltaVel = (float)(Math.PI * 1800 * mass);
 		ArrayList<String[]> receptorInfo = new ArrayList<String[]>();
 		try{
@@ -250,7 +286,7 @@ public class SegmentedCell implements SimObject{
 					}
 					if (var.equals("radius")){
 						radius = Float.parseFloat(value);
-						System.out.println("radius: " + radius);
+						//System.out.println("radius: " + radius);
 						continue;
 					}
 					if (var.equals("density")){
@@ -259,6 +295,7 @@ public class SegmentedCell implements SimObject{
 					}
 					if (var.equals("maxDeltaVel")){
 						maxDeltaVel = Float.parseFloat(value);
+						System.out.println("Max delta vel " + maxDeltaVel);
 						continue;
 					}
 				}
@@ -280,6 +317,7 @@ public class SegmentedCell implements SimObject{
 			nextCell.setCellType(type);
 			nextCell.setOutputFile(sim.getCellFile());
 			nextCell.setMaxDeltaVel(maxDeltaVel);
+			//System.out.println("Just made cell: position: " + nextCell.origin.toString());
 			cells.add(nextCell);
 		}
 		//Add receptors to each cell
@@ -320,9 +358,6 @@ public class SegmentedCell implements SimObject{
 		
 		if (!hasReceptors){
 			//no proteins yet!
-			for (int i = 0; i < numSegments; i++){
-				membraneSegments[i] = new SurfaceSegment(this, i);
-			}
 			hasReceptors = true;
 			visibleProtein = proID; //by default, the first protein is the default
 			baseColor = getProtein(visibleProtein).getColor();
@@ -400,9 +435,9 @@ public class SegmentedCell implements SimObject{
 			myArea = triangleAreas[whichTriangle];
 			otherAreaPercent = Math.min(1.0f,myArea/theWall.getSurfaceArea(wallSurface));
 			/*System.out.println("Cell Normal: " + myNormal.toString());
-			System.out.println("whichTriangle: " + whichTriangle);
-			System.out.println("myArea: " + myArea);
-			System.out.println("Wall Surface: " + wallSurface); */
+			System.out.println("whichTriangle: " + whichTriangle);*/
+			//System.out.println("detail level: " + detailLevel + " myArea: " + myArea);
+			/*System.out.println("Wall Surface: " + wallSurface); */
 			vertices = theWall.getWorldCoordinates(wallSurface);
 			//for (int i = 0; i < vertices.length; i++){
 			//	System.out.println("wall vertices(" + i + "):" + vertices[i]);
@@ -442,13 +477,13 @@ public class SegmentedCell implements SimObject{
 				continue;
 			}
 			int[] ligands = p.getLigands(); //These are the ligands for this receptor
-			//System.out.println("I have the ligands for the protein: " + ligands.toString());
+			//System.out.println("I have the ligands for the protein: " + p.getName());
 			for (int j = 0; j < ligands.length; j++){
 				int lig = ligands[j];
 				float bondLength = p.getBondLength(j);
 				float bindingRate = p.getBindingRate(j);
 				float stableTime = p.getBondLifetime(j);
-				//System.out.println("the bondlength : " + bondLength + "+ bindingRate: " + bindingRate + " timeToStable" + stableTime);
+				//System.out.println(p.getName()+"/"+sim.getProteinName(lig)+": bondlength : " + bondLength + " bindingRate: " + bindingRate + " timeToStable " + stableTime);
 				for (int k = 0; k < theirProteins.length; k++){
 					if (lig == theirProteins[k]){
 						//System.out.println(k + "Their surface has this ligand. Make bonds");
@@ -457,17 +492,26 @@ public class SegmentedCell implements SimObject{
 						float numLig = theirSegment.getNumMolecules(lig, false) * otherAreaPercent;
 						//System.out.println("Their ligands: " + numLig);
 						if (numLig < 0){
+							System.out.println("Num ligands < 0");
 							continue;
 						}
 						//Find the volume that these would be in
+						//float volume = myArea * 0.01f; //in cubic microns
+						//TODO Try volume of size of ectodomain -.02 for integrin http://cshperspectives.cshlp.org/content/3/3/a004994.full
 						float volume = myArea * bondLength; //in cubic microns
-						float dTime = sim.getDeltaTimeMicroseconds() / 1000000 / 60f; //time in minutes
+						volume = myArea * .02f;
+						float dTime = Math.min((sim.getDeltaTimeMicroseconds() / 1000000 / 60f), 1f/60);
 						float ligConc = (float)((numLig * 10)/(volume * 6.02)); //converts concentration to microMolar
 						int maxBonds = (int)(dTime * bindingRate * numRec * ligConc/Protein.MOLS_PER_BOND);
-						//System.out.println("maxBonds: " + maxBonds);
+						//System.out.println("maxBonds: " + maxBonds + " dTime: " + dTime + " volume: " + volume);
 						for (int m = 0; m < maxBonds; m++){
+							numRec = mySegment.getNumMolecules(myReceptors[i], false);
 							//System.out.println("Calling attemptBond " + m + " of " + maxBonds);
-							attemptBond(mySegment, j,  theirSegment, k,  myVertices, vertices, myNormal, otherNormal, bondLength, stableTime);
+							if (numRec > 0 && numLig > 0){
+								if (attemptBond(mySegment, myReceptors[i],  theirSegment, lig,  myVertices, vertices, myNormal, otherNormal, bondLength, stableTime)){
+									numLig -= Protein.MOLS_PER_BOND;
+								}
+							}
 						}
 					}
 				}
@@ -476,8 +520,12 @@ public class SegmentedCell implements SimObject{
 		
 	}
 	
-	private void attemptBond(SurfaceSegment initiator, int initProtein, SurfaceSegment receiver, int recProtein, Vector3f[] initVerts, Vector3f [] recVerts, Vector3f initNormal, Vector3f recNormal, float maxLength, float bondTime){
+	private boolean attemptBond(SurfaceSegment initiator, int initProtein, SurfaceSegment receiver, int recProtein, Vector3f[] initVerts, Vector3f [] recVerts, Vector3f initNormal, Vector3f recNormal, float maxLength, float bondTime){
 		//System.out.println("\n\nAttempting a bond");
+		if (!sim.constraintAvailable()){
+			System.err.println("Must be a problem. Too many bonds. I am " + getType() + "-" + getID());
+			return false;
+		}
 		//Get a random point on the initiator triangle
 		//Note - to find a random point on the triangle:
 		//http://adamswaab.wordpress.com/2009/12/11/random-point-in-a-triangle-barycentric-coordinates/
@@ -513,7 +561,7 @@ public class SegmentedCell implements SimObject{
 		float dot = initNormal.dot(recNormal); //l dot n
 		if (Math.abs(dot) < .005){
 			//The line is parallel to the plane. Don't make a bond
-			return;
+			return false;
 		}
 		Vector3f num = new Vector3f(recVerts[0]);
 		num.sub(randVec); //p0 - l0
@@ -523,19 +571,20 @@ public class SegmentedCell implements SimObject{
 		Vector3f dist = new Vector3f(initNormal); // dl
 		dist.scale(d);
 		planePoint.add(dist);//l0 + dl
-		/*System.out.println("randVec " + randVec);
-		System.out.println("dot " + dot);
-		System.out.println("num: " + num);
-		System.out.println("numerator: " + numerator);
-		System.out.println("d: " + d);
-		System.out.println("dist" + dist);
-		System.out.println("planePoint: " + planePoint);*/
+		//System.out.println("randVec " + randVec);
+		//System.out.println("dot " + dot);
+		//System.out.println("num: " + num);
+		//System.out.println("numerator: " + numerator);
+		//System.out.println("d: " + d);
+		//System.out.println("dis t" + dist + " max length " +maxLength);
+		//System.out.println("planePoint: " + planePoint);
 		
 		Vector3f lenVec = new Vector3f(planePoint);
 		lenVec.sub(randVec);
 		//System.out.println("lenVec length " + lenVec.length());
 		//planePoint.sub(randVec);
 		if (lenVec.length() <= maxLength){
+			//System.out.println("Making bond");
 			Transform transA = new Transform();
 			initiator.getParent().getRigidBody().getMotionState().getWorldTransform(transA);
 			Transform bas = new Transform(transA);
@@ -554,6 +603,10 @@ public class SegmentedCell implements SimObject{
 			
 			BondConstraint bc = new BondConstraint(sim, bondTime, initiator, receiver, initProtein, recProtein, initiator.getParent().getRigidBody(), receiver.getParent().getRigidBody(), transA, transB, true);
 		}
+		else{
+			//System.out.println("Not making bond too far apart");
+		}
+		return true;
 	}
 	
 	public boolean collidedWith(SimObject s){
@@ -577,30 +630,33 @@ public class SegmentedCell implements SimObject{
 	}
 	
 	public void updateObject(){
-		if (!body.isActive()){
+		if (!this.body.isActive()){
 			//System.out.println("Cell " + this.myId + " has been deactivated.");
-			body.activate();
+			this.body.activate();
 		}
 		//System.out.println("Detail Level: " + detailLevel + " num segments: " + numSegments);
-		
+		//System.out.println("Starting update: " + lastPosition.toString());
 		float downForce = (mass * 9.8f) - (volume * 9.8f);
-		body.setGravity(new Vector3f(0, -downForce, 0));
-		
-		if (sim.getDeltaTimeMicroseconds()>0){
-			//float maxvel = (float)((Math.PI/30.0)/(sim.getDeltaTimeMicroseconds()/1000000));
-			float maxvel = maxDeltaVel;
-			int randomAxis = (int)(sim.getNextRandomF() * 3);
-			float randomVel = sim.getNextRandomF() * maxvel;
-			if (sim.getNextRandomF() > .5){
-				randomVel = -randomVel;
-			}
-			float[] addVal = new float[]{0f, 0f, 0f};
-			addVal[randomAxis] = randomVel;
+		this.body.setGravity(new Vector3f(0, -downForce, 0));
+		long now = sim.getCurrentTimeMicroseconds();
+		long delta = (long)sim.getDeltaTimeMicroseconds();
+		if (delta > 0){
+			
+			Vector3f addVel = getRandomVector(maxDeltaVel);
+			lastDeltaAV = new Vector3f(addVel);
+			//System.out.print("addVel: " + addVel.toString());
+			//Normals - check for close to 0
+			//System.out.print("mag: " + mag + " Random addVel: " + addVel);
+			//addVel.normalize();
+			//System.out.print(" normalized: " + addVel);
+			//System.out.println("  scaled: " + addVel);
 			Vector3f oldVel = new Vector3f(0, 0, 0);
-			body.getAngularVelocity(oldVel);
-			oldVel.add(new Vector3f(addVal));
+			this.body.getAngularVelocity(oldVel);
+			//System.out.print(" Oldvel: " + oldVel.toString());
+			oldVel.add(addVel);
+			//System.out.println(" new vel: " + oldVel.toString());
 			//System.out.println(oldVel);
-			body.setAngularVelocity(oldVel);
+			this.body.setAngularVelocity(oldVel);
 		}
 			//Find the current position
 		this.body.getMotionState().getWorldTransform(trans);
@@ -608,10 +664,16 @@ public class SegmentedCell implements SimObject{
 		distance.sub(trans.origin, lastPosition);
 		accumulatedDistance += distance.length();
 		lastPosition = new Vector3f(trans.origin);
+		this.body.getAngularVelocity(lastAV);
+		this.body.getLinearVelocity(lastLV);
 		
-		//Does this cell have surface receptors? If so, update them
-		if (hasReceptors){
-			
+		int numSurfaces = membraneSegments.length;
+		//TODO We are going to set the axis to be the x for now! 
+		//We probably want the distance from source to be attached to the gradient
+		for (int i = 0; i < numSurfaces; i++){
+			Vector3f cen = new Vector3f(triangleCenters[i]);
+			cen.x = sim.getDistanceFromSource(cen.x);
+			membraneSegments[i].update(now, delta, cen);
 		}
 		
 	}
@@ -624,6 +686,27 @@ public class SegmentedCell implements SimObject{
 	
 	public void setMaxDeltaVel(float m){
 		maxDeltaVel = m;
+	}
+	
+	private Vector3f getRandomVector(float mag){
+		float sum = 2;
+		float randX1 = 0;
+		float randX2 = 0;
+		float oneSquared = 0;
+		float twoSquared = 0;
+		while (sum >= 1.0f){
+			randX1 = sim.getNextRandomF() * 2 - 1.0f;
+			randX2 = sim.getNextRandomF() * 2 - 1.0f;
+			oneSquared = randX1 * randX1;
+			twoSquared = randX2 * randX2;
+			sum = randX1 * randX1 + randX2 * randX2;
+		}
+		float xval = (float)(2 * randX1 * Math.sqrt(1 - oneSquared - twoSquared));
+		float yval = (float)(2 * randX2 * Math.sqrt(1 - oneSquared - twoSquared));
+		float zval = (float)(1 - 2 * (oneSquared + twoSquared));
+		Vector3f vec = new Vector3f(xval, yval, zval);
+		vec.scale(mag);
+		return vec;
 	}
 	
 	public boolean hasTraffickInfoForProtein(int id){
@@ -741,6 +824,9 @@ public class SegmentedCell implements SimObject{
 		}
 	}
 
+	public boolean isMobile(){
+		return true;
+	}
 	
 	public boolean isBound(){
 		return bound;
@@ -761,8 +847,16 @@ public class SegmentedCell implements SimObject{
 		return boundProtein;
 	}
 	
+	public String getSurfaceSegmentOutput(){
+		String s = "";
+		for (int i = 0; i < numSegments; i++){
+			s += membraneSegments[i].getOutput(sim);
+		}
+		return s;
+	}
+	
 	public static String getDataHeaders(){
-		String s = "Time Since Sim Start\tCell Type\tCell ID\txPos\tyPos\tzPos\n";
+		String s = "Time Since Sim Start\tCell Type\tCell ID\txPos\tyPos\tzPos\txLastAV\tyLastAV\tzLastAV\txLastDeltaAV\tyLastDeltaAV\tzLastDeltaAV\ttheta\txLastLV\tyLastLV\txLastLV\n";
 		return s;
 	}
 	
@@ -774,7 +868,8 @@ public class SegmentedCell implements SimObject{
 		Vector3f euclidDist = new Vector3f();
 		euclidDist.sub(lastPosition, initialPosition);
 		String s = "Segmented Cell (" + cellType + " id:" + myId + ")";
-		s += "\tAccumulated Distance\t" + accumulatedDistance + "\tEuclidean Distance," + euclidDist.length(); 
+		s += "\tAccumulated Distance\t" + accumulatedDistance + "\tEuclidean Distance," + euclidDist.length();
+		s+= "\tx:\tpos:"+ pos[0]+", neg:"+neg[0]+ "\ty:\tpos:"+ pos[1]+", neg:"+neg[1] + "\tz:\tpos:"+ pos[2]+", neg:"+neg[2];
 		return s;
 	}
 	
@@ -788,9 +883,12 @@ public class SegmentedCell implements SimObject{
 	
 	public void writeOutput(){
 		//also should write segment data
+		float hyp = (float)Math.sqrt(lastDeltaAV.x * lastDeltaAV.x + lastDeltaAV.z * lastDeltaAV.z);
+		float sineTheta = lastDeltaAV.z / hyp;
+		float theta = (float)Math.asin(sineTheta);
 		if (outputFile != null){
 			try{
-				outputFile.write(sim.getFormattedTime() + "\t" + cellType + "\t" + myId + "\t" + lastPosition.x + "\t" + lastPosition.y + "\t" + lastPosition.z + "\n");
+				outputFile.write(sim.getFormattedTime() + "\t" + cellType + "\t" + myId + "\t" + lastPosition.x + "\t" + lastPosition.y + "\t" + lastPosition.z + "\t" + lastAV.x + "\t" + lastAV.y +"\t" + lastAV.z + "\t" + lastDeltaAV.x +"\t" + lastDeltaAV.y +"\t" + lastDeltaAV.z + "\t" + theta + "\t" + lastLV.x + "\t" + lastLV.y + "\t" + lastLV.z +"\n");
 			}
 			catch(IOException e){
 				sim.writeToLog(sim.getFormattedTime() + "\t" + "Unable to write to cell file" + "\t" + e.toString());

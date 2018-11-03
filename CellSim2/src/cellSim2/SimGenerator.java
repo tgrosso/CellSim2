@@ -59,6 +59,7 @@ public class SimGenerator {
 	public int screenWidth;
 	public int screenHeight;
 	public float distFromSource;
+	public float startX;
 	public long endTime;
 	public boolean generateImages;
 	public float secBetweenOutput;
@@ -93,6 +94,12 @@ public class SimGenerator {
 		//for (int i = 0; i < proteins.size(); i++){
 		//	proteins.get(i).print(System.out);
 		//}
+		try{
+			Protein.setMolsPerBond(simValues.getValue(0, "molsPerBond"));
+		}
+		catch(SimException e){
+			System.err.println("Could not set molsPerBond - using default"); 
+		}
 		
 		gradients = new ArrayList<Gradient>();
 		createGradients();
@@ -268,6 +275,8 @@ public class SimGenerator {
 		//System.out.println("Vessel size: " + vesselSize.toString());
 		float channelWidth = vesselSize.x, channelHeight = vesselSize.y, channelDepth = vesselSize.z;
 		float wallThick = 2f;
+		startX = (-channelWidth+wallThick)/2.0f;
+		//System.out.println("startX = " + startX);
 		float[] wallColor = {.9f, .6f, .6f};
 		Wall nextWall;
 		Vector3f position = new Vector3f(0f, 0f, 0f);
@@ -526,6 +535,7 @@ public class SimGenerator {
 		HashMap<String, String> cellFiles = simValues.getCells();
 		for (Entry<String, String> entry : cellFiles.entrySet()){
 			String key = entry.getKey();
+			//System.out.println("getting these cells: key: " + key + " val: " + entry.getValue());
 			cells.addAll(SegmentedCell.readInFile(key, entry.getValue(), sim));
 		}
 		
@@ -560,7 +570,7 @@ public class SimGenerator {
 			System.err.println("Maximum number of single layer cells is " + gridNum);
 		}
 		//Determine the y value for the origin of each cell
-		float cellCenterY = -vesselSize.y/2 + maxRadius + 1;
+		float cellCenterY = -vesselSize.y/2 + maxRadius - 1.5f;
 		//System.out.println("Num cells: " + numCells);
 		//System.out.println("maxRadius: " + maxRadius);
 		//System.out.println("Center y: " + cellCenterY);
@@ -568,9 +578,7 @@ public class SimGenerator {
 		//if there is only one cell. put it right in the middle - it's a testing issue
 		if (numCells == 1){
 			SegmentedCell c = cells.get(0);
-			//sim.removeSimulationObject(c);
 			c.setInitialPosition(new Vector3f(0, cellCenterY, 0));
-			//sim.addSimulationObject(c);
 		}
 		else{
 			//System.out.println("y: " + cellCenterY);
@@ -601,22 +609,25 @@ public class SimGenerator {
 			}
 		}
 		//For debugging
-		/*for (int i = 0; i < numCells; i++){
+		/*
+		for (int i = 0; i < numCells; i++){
 			//System.out.println("Debugging: SimGenerator");
 			SegmentedCell c = cells.get(i);
+			
+			//System.out.println("End of making cells: " + c.getRigidBody().getCenterOfMassPosition(out));
 			//System.out.println("Cell number: " + i);
-			HashSet<Integer> lig = c.getReceptorsBindTo();
-			HashSet<Integer> rec = c.getSurfaceProteins();
-			Iterator<Integer> iter = lig.iterator();
-			System.out.println("Receptors on this cell bind to:");
-			while (iter.hasNext()) {
-			    System.out.println("    " + sim.getProteinName(iter.next().intValue()));
-			}
-			iter = rec.iterator();
-			System.out.println("Proteins on this cell:");
-			while (iter.hasNext()) {
-			    System.out.println("    " + sim.getProteinName(iter.next().intValue()));
-			}
+			//HashSet<Integer> lig = c.getReceptorsBindTo();
+			//HashSet<Integer> rec = c.getSurfaceProteins();
+			//Iterator<Integer> iter = lig.iterator();
+			//System.out.println("Receptors on this cell bind to:");
+			//while (iter.hasNext()) {
+			//    System.out.println("    " + sim.getProteinName(iter.next().intValue()));
+			//}
+			//iter = rec.iterator();
+			//System.out.println("Proteins on this cell:");
+			//while (iter.hasNext()) {
+			//    System.out.println("    " + sim.getProteinName(iter.next().intValue()));
+			//}
 		}*/
 	}
 	
