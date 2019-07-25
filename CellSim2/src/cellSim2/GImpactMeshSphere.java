@@ -66,8 +66,8 @@ private final static int VERTEX_DIM = 3, EDGE_INDICES = 2, TRIANGLE_INDICES = 3;
 				}
 				System.out.println("");
 			}
-		}
-		*/
+		}*/
+
 		
 		for (int i = 0; i < maxSteps; i++){
 			makeIndexArray(i);
@@ -77,15 +77,26 @@ private final static int VERTEX_DIM = 3, EDGE_INDICES = 2, TRIANGLE_INDICES = 3;
 	}
 	
 	private static void initializeTriangles(){
-		float cornerValue = (float)Math.sin(Math.toRadians(45.0));
+		//float cornerValue = (float)Math.sin(Math.toRadians(45.0));
 
+		float a = (float)(0.816496580927726);
+		float b = (float)(0.5773502691896257);
+		float c = (float)(0.40824829046386296);
+		float d = (float)(0.7071067811865475);
 		vertices[0] = new float[]{
+			/*
 			0.0f, 1.0f, 0.0f,
 			-cornerValue, 0.0f, -cornerValue,
 			cornerValue, 0.0f, -cornerValue,
 			cornerValue, 0.0f, cornerValue,
 			-cornerValue, 0.0f, cornerValue,
-			0.0f, -1.0f, 0.0f
+			0.0f, -1.0f, 0.0f*/
+			-a, b, 0.0f,
+			-c, -b, -d,
+			c, b, -d, 
+			c, b, d,
+			-c, -b, d,
+			a, -b, 0.0f
 		};
 		
 		edges[0] = new int[]{
@@ -480,11 +491,61 @@ private final static int VERTEX_DIM = 3, EDGE_INDICES = 2, TRIANGLE_INDICES = 3;
 	public GImpactMeshSphere(int dl){
 		super(indexVertexArray[dl]);
 		detail_level = dl;
+		outputSomeData();
 	}
 	
 	public int getNumTriangles(){
 		int numTriangles = trianglesByVertices[detail_level].length/TRIANGLE_INDICES;
 		return numTriangles;
+	}
+	
+	public void outputSomeData(){
+		/*
+		System.out.println("detail level: " + detail_level);
+		for (int i = 0; i < vertices[detail_level].length/TRIANGLE_INDICES; i++){
+			float xVal = vertices[detail_level][i*TRIANGLE_INDICES];
+			float yVal = vertices[detail_level][i*TRIANGLE_INDICES];
+			float zVal = vertices[detail_level][i*TRIANGLE_INDICES];
+			System.out.println("Vertex " + i + ": " + xVal + ", " + yVal + ", " + zVal);
+		}*/
+		/*
+		System.out.println("num triangles: " + getNumTriangles());
+		System.out.println("len triangles by vertices: " + trianglesByVertices[detail_level].length);
+		System.out.println("len vertices: " + vertices[detail_level].length);
+		//int numTriangles = getNumTriangles();
+		int lowestVertex = 0;
+		float bottomVertex = 3;
+		for (int i = 0; i < vertices[detail_level].length/TRIANGLE_INDICES; i++){
+			int yIndex = i*TRIANGLE_INDICES +1;
+			//System.out.print("Vertex " + i + ": " + vertices[detail_level][xIndex] + ", " + vertices[detail_level][yIndex] + ", " + vertices[detail_level][zIndex]);
+			if (vertices[detail_level][yIndex]< bottomVertex){
+				lowestVertex = yIndex;
+				bottomVertex = vertices[detail_level][yIndex];
+			}
+		}
+		System.out.println("Lowest Vertex = " + lowestVertex);
+		System.out.println("Bottom Vertex = " + bottomVertex);
+		for (int i = 0; i < trianglesByVertices[detail_level].length/TRIANGLE_INDICES; i++){
+			int vertex0 = i*TRIANGLE_INDICES;
+			int vertex1 = i*TRIANGLE_INDICES + 1;
+			int vertex2 = i*TRIANGLE_INDICES + 2;
+			if (vertex0 == lowestVertex || vertex1 == lowestVertex || vertex2 == lowestVertex){
+				System.out.println("Triangle " + i + ":");
+				System.out.println("V0: " + vertex0 + " V1: " + vertex1 + " V2: " + vertex2);
+				System.out.println(vertices[detail_level][vertex0] + ", " + vertices[detail_level][vertex1] + ", " + vertices[detail_level][vertex2]);
+			}
+		}*/
+	}
+	
+	public float getLowestY(){
+		float bottomVertex = 3;
+		for (int i = 0; i < vertices[detail_level].length/3; i++){
+			int yIndex = i*3 +1;
+			if (vertices[detail_level][yIndex]< bottomVertex){
+				bottomVertex = vertices[detail_level][yIndex];
+			}
+		}
+		return bottomVertex;
 	}
 
 

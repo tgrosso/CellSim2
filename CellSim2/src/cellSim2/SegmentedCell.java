@@ -22,6 +22,7 @@ import java.io.FileInputStream;
 import java.util.HashSet;
 
 import javax.vecmath.Vector3f;
+import javax.vecmath.Matrix3f;
 
 import com.bulletphysics.collision.dispatch.CollisionFlags;
 import com.bulletphysics.collision.narrowphase.ManifoldPoint;
@@ -53,6 +54,9 @@ import org.lwjgl.opengl.GL11;
 public class SegmentedCell implements SimObject{
 	
 	private static int cell_ids = 0;
+	private static float concConvertion = (float)(1 / .60221409);
+	//converts concentration to nanoMolar - 
+	//molecules/cubic microns * 1 mole / Avogardro's molecules * cubic micron/10 -15 L * 1 nanomole/10-9 moles
 	private int myId;
 	private boolean visible = true;
 	private boolean toRemove = false;
@@ -67,11 +71,12 @@ public class SegmentedCell implements SimObject{
 	private BufferedWriter outputFile;
 	
 	private Vector3f origin, initialPosition, lastPosition, lastAV, lastDeltaAV, lastLV;
+	private float minY = 0;
 	private float accumulatedDistance;
 	private float radius;
 	private float density = 1.01f;
 	private float volume, mass;
-	private float maxDeltaVel=2; //units radians per second
+	private float maxDeltaVel=1; //units radians per second
 	private int numSegments;
 	private int detailLevel;
 	private static GImpactMeshSphere cellShape;
@@ -89,13 +94,16 @@ public class SegmentedCell implements SimObject{
 	protected HashSet<Integer> surfaceProteins;
 	protected HashSet<Integer> receptorsBindTo;
 	private boolean hasReceptors;
+	private boolean[] segCollided;
 	
 	private static float[] glMat = new float[16];
 	private static Vector3f aabbMax = new Vector3f(1e30f, 1e30f, 1e30f);
 	private static Vector3f aabbMin = new Vector3f(-1e30f, -1e30f, -1e30f);
+	private Vector3f posValues, negValues;
 
 	private long[] pos;
 	private long[] neg;
+	
 
 	/**
 	 * Represents the basic cell that moves around in a simulation
@@ -104,6 +112,8 @@ public class SegmentedCell implements SimObject{
 		this.myId = cell_ids;
 		cell_ids++;
 		this.sim = s;
+		posValues = new Vector3f(0, 0, 0);
+		negValues = new Vector3f(0, 0, 0);
 		
 		this.origin = o;
 		initialPosition = new Vector3f(o);
@@ -118,10 +128,19 @@ public class SegmentedCell implements SimObject{
 		trans = new Transform();
 		trans.setIdentity();
 		trans.origin.set(this.origin);
+		float randTheta = (float)(sim.getNextRandomF() * Math.PI);
+		float si = (float)Math.sin(randTheta);
+		float cs = (float)Math.cos(randTheta);
+		Matrix3f rot = new Matrix3f(cs, 0, si, 0, 1, 0, -si, 0, cs);
+		trans.set(rot);
+		//System.out.println("Random Theta: " + randTheta);
 		
 		cellShape = new GImpactMeshSphere(dl);
+		//cellShape.outputSomeData();
 		cellShape.setLocalScaling(new Vector3f(radius, radius, radius));
 		cellShape.updateBound();
+		minY = cellShape.getLowestY() * radius;
+		//System.out.println("minY " + minY);
 		Vector3f localInertia = new Vector3f(0, 0, 0);
 		cellShape.calculateLocalInertia(mass, localInertia);
 		
@@ -135,7 +154,7 @@ public class SegmentedCell implements SimObject{
 		
 		float downForce = (mass * 9.8f) - (volume * 9.8f);
 		body.setGravity(new Vector3f(0, -downForce, 0));
-		body.setAngularVelocity(getRandomVector(.1f));
+		//body.setAngularVelocity(getRandomVector(.1f));
 		lastAV = new Vector3f(0, 0, 0);
 		body.getAngularVelocity(lastAV);
 		lastLV = new Vector3f(0, 0, 0);
@@ -154,12 +173,14 @@ public class SegmentedCell implements SimObject{
 			surfaceArea += triangleAreas[i];
 			//System.out.println("triangle " + i + " surface area " + triangleAreas[i]);
 		}
+		//System.out.println("Seg Cell 172: Segment 0 fraction = " + triangleAreas[0]/surfaceArea);
 		
 		triangleVertices = new Vector3f[numSegments][];
 		
 		triangleVerticesCallback tcb = new triangleVerticesCallback(this);
 		cellShape.processAllTriangles(tcb, aabbMin, aabbMax);
 		
+		//System.out.println("Cell dl: " + detailLevel);
 		triangleCenters = new Vector3f[numSegments];
 		for (int i = 0; i < numSegments; i++){
 			Vector3f[] p = triangleVertices[i];
@@ -167,7 +188,12 @@ public class SegmentedCell implements SimObject{
 			float y = (p[0].y + p[1].y + p[2].y) / 3;
 			float z = (p[0].z + p[1].z + p[2].z) / 3;
 			triangleCenters[i] = new Vector3f(x, y, z);
+			//System.out.println("   " + " segment: " + i + " center: " + triangleCenters[i] );
 		}
+		
+		//triangleVerticesOutputCallback tvoc = new triangleVerticesOutputCallback(this, trans);
+		//cellShape.processAllTriangles(tvoc, aabbMin, aabbMax);
+		
 		
 		
 		//System.out.println("Total surface area = " + surfaceArea);
@@ -191,6 +217,11 @@ public class SegmentedCell implements SimObject{
 			pos[i] = 0;
 			neg[i] = 0;
 		}
+		segCollided = new boolean[numSegments];
+		for (int i = 0; i < numSegments; i++){
+			segCollided[i] = false;
+		}
+		
 	}
 	
 	public SegmentedCell(Simulation s, float r, int dl) {
@@ -239,8 +270,8 @@ public class SegmentedCell implements SimObject{
 		float density = 1.01f;
 		float volume = (float)(4.0/3.0 * Math.PI * radius * radius * radius);
 		float mass = density * volume;
-		//What the hell is this maxDeltaVel?
-		float maxDeltaVel = (float)(Math.PI * 1800 * mass);
+		
+		float maxDeltaVel = 1;
 		ArrayList<String[]> receptorInfo = new ArrayList<String[]>();
 		try{
 			FileInputStream fis = new FileInputStream(inFile);
@@ -295,7 +326,7 @@ public class SegmentedCell implements SimObject{
 					}
 					if (var.equals("maxDeltaVel")){
 						maxDeltaVel = Float.parseFloat(value);
-						System.out.println("Max delta vel " + maxDeltaVel);
+						//System.out.println("Max delta vel " + maxDeltaVel);
 						continue;
 					}
 				}
@@ -329,13 +360,14 @@ public class SegmentedCell implements SimObject{
 				System.err.println("Error adding receptor: " + proName + " does not exist");
 				continue;
 			}
-			long secrete = 0;
+			float secrete = 0;
 			float internUnbound = 0;
 			float internBound = 0;
 			try{
-				secrete = Long.parseLong(rec[1]);
-				internUnbound = Float.parseFloat(rec[2]);
-				internBound = Float.parseFloat(rec[3]);
+				//The rates in the text file are per minute - convert to per microseconds
+				secrete = Float.parseFloat(rec[1])/6e7f;
+				internUnbound = Float.parseFloat(rec[2])/6e7f ;
+				internBound = Float.parseFloat(rec[3])/6e7f;
 			}
 			catch(NumberFormatException e){
 				System.err.println("Error parsing receptor " + rec[0]);
@@ -353,8 +385,13 @@ public class SegmentedCell implements SimObject{
 	public void addReceptor(int proID, TraffickingInfo ti){
 		//Add the TraffickingInfo to the map
 		traffickRates.put(proID, ti);
+		//System.out.println("Seg Cell 383: ");
+		//System.out.println("  secretion: " + ti.getSecretionRate());
+		//System.out.println("  unboundInt: " + ti.getUnboundIntRate());
+		//System.out.println("   boundInt: " + ti.getBoundIntRate());
 		//Find the steady state secretion rate for the whole cell
 		float totalUnbound = ti.getSecretionRate() / ti.getUnboundIntRate();
+		//System.out.println("   unbound: " + totalUnbound);
 		
 		if (!hasReceptors){
 			//no proteins yet!
@@ -363,6 +400,7 @@ public class SegmentedCell implements SimObject{
 			baseColor = getProtein(visibleProtein).getColor();
 		}
 		for (int i = 0; i < numSegments; i++){
+			//System.out.println("Seg Cell 392: Adding receptor to cell");
 			membraneSegments[i].addReceptor(proID, totalUnbound * triangleAreas[i]/surfaceArea);
 		}
 		
@@ -390,224 +428,64 @@ public class SegmentedCell implements SimObject{
 	}
 	
 	public void collided(SimObject c, ManifoldPoint mp, long collID){
+		//System.out.println("Collided. Segmented Cell");
 		if (!hasReceptors){
 			//Nothing to bind to!
 			return;
 		}
 		
-		int mpThis = 0;//this object is object A in the manifold point
-		Vector3f myNormal = new Vector3f();
-		Vector3f otherNormal = new Vector3f();
-		int whichTriangle = -1;
-		float myArea = 0;
-		float otherAreaPercent = 0;
-		SurfaceSegment mySegment = null;
-		SurfaceSegment theirSegment = null;
-		Vector3f[] vertices = new Vector3f[0];
-		
-		//if collID == 0, it's colliding with a wall. Else it's another type of object
-		//System.out.println("\nCollision");
-		if (collID == 0){
-			//Working with a wall
-			Wall theWall = (Wall)c;
-			myNormal = mp.normalWorldOnB; //Points from Object B to Object A
-			int wallSurface = -1;
-			if (mp.index0 == -1){
-				//walls return -1 for their index value. This means Cell is Object B
-				mpThis = 1;
-				whichTriangle = mp.index1;
-				wallSurface = theWall.getSurface(mp.localPointA);
-			}
-			else{
-				//Need the normal to point from Cell to Wall. If we are here, it's backwards.
-				myNormal.negate();
-				whichTriangle = mp.index0;
-				wallSurface = theWall.getSurface(mp.localPointB);
-			}
-			otherNormal = theWall.getNormal(wallSurface);
-			theirSegment = theWall.getSurfaceSegment(wallSurface);
-			if (theirSegment == null){
-				//no proteins on this surface
-				return; 
-			}
-			//wallSurface = 0;
-			mySegment = membraneSegments[whichTriangle];
-			myArea = triangleAreas[whichTriangle];
-			otherAreaPercent = Math.min(1.0f,myArea/theWall.getSurfaceArea(wallSurface));
-			/*System.out.println("Cell Normal: " + myNormal.toString());
-			System.out.println("whichTriangle: " + whichTriangle);*/
-			//System.out.println("detail level: " + detailLevel + " myArea: " + myArea);
-			/*System.out.println("Wall Surface: " + wallSurface); */
-			vertices = theWall.getWorldCoordinates(wallSurface);
-			//for (int i = 0; i < vertices.length; i++){
-			//	System.out.println("wall vertices(" + i + "):" + vertices[i]);
-			//}
-			//System.out.println("Wall normal " + otherNormal);
-		}
-		else{
-			//System.out.println("Hit a cell");
-			//otherAreaPercent should be 1.0f
+		HashSet<Integer> otherProteins = c.getSurfaceProteins();
+		if (otherProteins == null || otherProteins.size() < 1){
+			//Nothing to bind to!
 			return;
 		}
-		Transform myTrans = new Transform();
-		body.getMotionState().getWorldTransform(myTrans);
-		Vector3f[] myVertices = new Vector3f[3];
-		for (int i = 0; i < 3; i++){
-			myVertices[i] = new Vector3f(triangleVertices[whichTriangle][i]);
-			//System.out.println("      Pre-transform vertex " + i + myVertices[i]);
-			myTrans.transform(myVertices[i]);
-			//System.out.println("      Post-transform vertex " + i + myVertices[i]);
+		//Find the indexes of the surface segments
+		int mySegment = (collID==0) ? mp.index0 : mp.index1;
+		int theirSegment = (collID==0) ? mp.index1 : mp.index0;
+		if (theirSegment == -1){
+			//The other object is a wall, find the appropriate surface
+			Wall theWall = (Wall)c;
+			Vector3f theirPoint = (collID ==0) ? mp.localPointB : mp.localPointA;
+			theirSegment = theWall.getSurface(theirPoint);
 		}
-		//System.out.println("Ready to make bonds");
-		//So I have both surface segments, the percent of their segment that I'm looking at,
-		//the coordinates of their vertices (3 for triangle, 4 for rectangle) in the world
-		//frame, and the coordinates of my vertices in world coordinates and the normal from the cell to the other surface
-		//Do any of my surface proteins have ligands on the other segment?
+		//Get the relevant surface segments
+		SurfaceSegment mySurface = getSurfaceSegment(mySegment);
+		SurfaceSegment theirSurface = c.getSurfaceSegment(theirSegment);
+		if (theirSurface == null){
+			//They don't have receptors here!
+			return;
+		}
+		/*if (mp.index0 != -1 && mp.index1 != -1){
+			System.out.println("Not a wall!");
+			System.out.println("The collID is : " + collID);
+			System.out.println("index 0: " + mp.index0 + " index 1: " + mp.index1);
+			System.out.println("mySegment: " + mySegment + " theirSegment: " + theirSegment);
+		}*/
 		
-		int[] myReceptors = mySegment.getProteins();
-		int[] theirProteins = theirSegment.getProteins();
-		for (int i = 0; i < myReceptors.length; i++){
-			Protein p = sim.getProtein(myReceptors[i]);
-			//System.out.println("Got protein: " + p.getName());
-			
-			float numRec = mySegment.getNumMolecules(myReceptors[i], false);
-			//System.out.println("I have : " + numRec + " free receptors");
-			if (numRec < 0){
-				//This receptor is not on my segment - shouldn't ever happen!
-				continue;
-			}
-			int[] ligands = p.getLigands(); //These are the ligands for this receptor
-			//System.out.println("I have the ligands for the protein: " + p.getName());
-			for (int j = 0; j < ligands.length; j++){
-				int lig = ligands[j];
-				float bondLength = p.getBondLength(j);
-				float bindingRate = p.getBindingRate(j);
-				float stableTime = p.getBondLifetime(j);
-				//System.out.println(p.getName()+"/"+sim.getProteinName(lig)+": bondlength : " + bondLength + " bindingRate: " + bindingRate + " timeToStable " + stableTime);
-				for (int k = 0; k < theirProteins.length; k++){
-					if (lig == theirProteins[k]){
-						//System.out.println(k + "Their surface has this ligand. Make bonds");
-						//How many bonds should we attempt?
-						//I need the number of unbound receptors on their surface
-						float numLig = theirSegment.getNumMolecules(lig, false) * otherAreaPercent;
-						//System.out.println("Their ligands: " + numLig);
-						if (numLig < 0){
-							System.out.println("Num ligands < 0");
-							continue;
-						}
-						//Find the volume that these would be in
-						//float volume = myArea * 0.01f; //in cubic microns
-						//TODO Try volume of size of ectodomain -.02 for integrin http://cshperspectives.cshlp.org/content/3/3/a004994.full
-						float volume = myArea * bondLength; //in cubic microns
-						volume = myArea * .02f;
-						float dTime = Math.min((sim.getDeltaTimeMicroseconds() / 1000000 / 60f), 1f/60);
-						float ligConc = (float)((numLig * 10)/(volume * 6.02)); //converts concentration to microMolar
-						int maxBonds = (int)(dTime * bindingRate * numRec * ligConc/Protein.MOLS_PER_BOND);
-						//System.out.println("maxBonds: " + maxBonds + " dTime: " + dTime + " volume: " + volume);
-						for (int m = 0; m < maxBonds; m++){
-							numRec = mySegment.getNumMolecules(myReceptors[i], false);
-							//System.out.println("Calling attemptBond " + m + " of " + maxBonds);
-							if (numRec > 0 && numLig > 0){
-								if (attemptBond(mySegment, myReceptors[i],  theirSegment, lig,  myVertices, vertices, myNormal, otherNormal, bondLength, stableTime)){
-									numLig -= Protein.MOLS_PER_BOND;
-								}
-							}
-						}
-					}
+		//Go through each of the receptors on my surface
+		for (Integer p: surfaceProteins){
+			Protein pro = sim.getProtein(p);
+			//Get the ligands for this protein
+			int[] ligands = pro.getLigands();
+			for (int i = 0; i < ligands.length; i++){
+				int proId = ligands[i];
+				if (otherProteins.contains(proId)){
+					//My receptor binds to the ligand on the other's surface
+					//System.out.println("My receptor: " + pro.getName() + " Their ligand: " + sim.getProtein(proId).getName());
+					//Try to make bonds
+					Utilities.makeBonds(sim, p, proId, mySurface, theirSurface);
 				}
 			}
 		}
 		
+		//collID tells us which is my index in the manifold point.
+		
+		
+		
 	}
+
 	
-	private boolean attemptBond(SurfaceSegment initiator, int initProtein, SurfaceSegment receiver, int recProtein, Vector3f[] initVerts, Vector3f [] recVerts, Vector3f initNormal, Vector3f recNormal, float maxLength, float bondTime){
-		//System.out.println("\n\nAttempting a bond");
-		if (!sim.constraintAvailable()){
-			System.err.println("Must be a problem. Too many bonds. I am " + getType() + "-" + getID());
-			return false;
-		}
-		//Get a random point on the initiator triangle
-		//Note - to find a random point on the triangle:
-		//http://adamswaab.wordpress.com/2009/12/11/random-point-in-a-triangle-barycentric-coordinates/
-		//Get two vectors on the triangle
-		Vector3f T1 = new Vector3f(initVerts[1]);//AB
-		T1.sub(initVerts[0]);
-		Vector3f T2 = new Vector3f(initVerts[2]);//AC
-		T2.sub(initVerts[0]);
-		/*
-		System.out.println("initial 0: " + initVerts[0] + " initial 1: " + initVerts[1] + " initial 2: " + initVerts[2]);
-		System.out.println("T1 :" + T1 + " T2: " + T2);*/
-		//Get two random values
-		float r = sim.getNextRandomF();
-		float s = sim.getNextRandomF();
-		while(r==s){ //make sure they are different
-			r = sim.getNextRandomF();
-		}
-		if (r + s >= 1){
-			r = 1 - r;
-			s = 1 - s;
-		}
-		T1.scale(r);
-		T2.scale(s);
-		//System.out.println("r: " + r + " s: " + s + "T1 :" + T1 + " T2: " + T2);
-		Vector3f randVec = new Vector3f(initVerts[0]);
-		randVec.add(T1);
-		randVec.add(T2);
-		//sim.writeToLog("Random Triangle Point: " + randVec);
-		//Get the normal for the receiver plane
-		//System.out.println("recVerts[0]: " + recVerts[0] + " recVerts[1]: " + recVerts[1] + " recVerts[2]: " + recVerts[2]);
-		
-		//Are the normal from the initiating surface to the plane and the plane normal parallel?
-		float dot = initNormal.dot(recNormal); //l dot n
-		if (Math.abs(dot) < .005){
-			//The line is parallel to the plane. Don't make a bond
-			return false;
-		}
-		Vector3f num = new Vector3f(recVerts[0]);
-		num.sub(randVec); //p0 - l0
-		float numerator = num.dot(recNormal);//(p0 - l0) dot n
-		float d = numerator/dot;
-		Vector3f planePoint = new Vector3f(randVec);//l0
-		Vector3f dist = new Vector3f(initNormal); // dl
-		dist.scale(d);
-		planePoint.add(dist);//l0 + dl
-		//System.out.println("randVec " + randVec);
-		//System.out.println("dot " + dot);
-		//System.out.println("num: " + num);
-		//System.out.println("numerator: " + numerator);
-		//System.out.println("d: " + d);
-		//System.out.println("dis t" + dist + " max length " +maxLength);
-		//System.out.println("planePoint: " + planePoint);
-		
-		Vector3f lenVec = new Vector3f(planePoint);
-		lenVec.sub(randVec);
-		//System.out.println("lenVec length " + lenVec.length());
-		//planePoint.sub(randVec);
-		if (lenVec.length() <= maxLength){
-			//System.out.println("Making bond");
-			Transform transA = new Transform();
-			initiator.getParent().getRigidBody().getMotionState().getWorldTransform(transA);
-			Transform bas = new Transform(transA);
-			transA.inverse();
-			transA.transform(randVec);
-			transA.origin.set(randVec);
-			transA.basis.set(bas.basis);
-			
-			Transform transB = new Transform();
-			receiver.getParent().getRigidBody().getMotionState().getWorldTransform(transB);
-			bas = new Transform(transB);
-			transB.inverse();
-			transB.transform(planePoint);
-			transB.origin.set(planePoint);
-			transB.basis.set(bas.basis);
-			
-			BondConstraint bc = new BondConstraint(sim, bondTime, initiator, receiver, initProtein, recProtein, initiator.getParent().getRigidBody(), receiver.getParent().getRigidBody(), transA, transB, true);
-		}
-		else{
-			//System.out.println("Not making bond too far apart");
-		}
-		return true;
-	}
+	
 	
 	public boolean collidedWith(SimObject s){
 		if (collidedObjects.indexOf(s) == -1){
@@ -641,21 +519,12 @@ public class SegmentedCell implements SimObject{
 		long now = sim.getCurrentTimeMicroseconds();
 		long delta = (long)sim.getDeltaTimeMicroseconds();
 		if (delta > 0){
-			
 			Vector3f addVel = getRandomVector(maxDeltaVel);
+			
 			lastDeltaAV = new Vector3f(addVel);
-			//System.out.print("addVel: " + addVel.toString());
-			//Normals - check for close to 0
-			//System.out.print("mag: " + mag + " Random addVel: " + addVel);
-			//addVel.normalize();
-			//System.out.print(" normalized: " + addVel);
-			//System.out.println("  scaled: " + addVel);
 			Vector3f oldVel = new Vector3f(0, 0, 0);
 			this.body.getAngularVelocity(oldVel);
-			//System.out.print(" Oldvel: " + oldVel.toString());
 			oldVel.add(addVel);
-			//System.out.println(" new vel: " + oldVel.toString());
-			//System.out.println(oldVel);
 			this.body.setAngularVelocity(oldVel);
 		}
 			//Find the current position
@@ -667,11 +536,12 @@ public class SegmentedCell implements SimObject{
 		this.body.getAngularVelocity(lastAV);
 		this.body.getLinearVelocity(lastLV);
 		
-		int numSurfaces = membraneSegments.length;
 		//TODO We are going to set the axis to be the x for now! 
 		//We probably want the distance from source to be attached to the gradient
-		for (int i = 0; i < numSurfaces; i++){
+		//System.out.println("Cell center: " + trans.origin);
+		for (int i = 0; i < membraneSegments.length; i++){
 			Vector3f cen = new Vector3f(triangleCenters[i]);
+			trans.transform(cen);
 			cen.x = sim.getDistanceFromSource(cen.x);
 			membraneSegments[i].update(now, delta, cen);
 		}
@@ -685,10 +555,13 @@ public class SegmentedCell implements SimObject{
 	}
 	
 	public void setMaxDeltaVel(float m){
+		//maxDeltaVel = (float)(m/Math.pow(detailLevel, .25));
 		maxDeltaVel = m;
 	}
 	
 	private Vector3f getRandomVector(float mag){
+		//http://mathworld.wolfram.com/SpherePointPicking.html
+		float m = sim.getNextRandomF() * mag;
 		float sum = 2;
 		float randX1 = 0;
 		float randX2 = 0;
@@ -699,13 +572,34 @@ public class SegmentedCell implements SimObject{
 			randX2 = sim.getNextRandomF() * 2 - 1.0f;
 			oneSquared = randX1 * randX1;
 			twoSquared = randX2 * randX2;
-			sum = randX1 * randX1 + randX2 * randX2;
+			sum = oneSquared + twoSquared;
 		}
 		float xval = (float)(2 * randX1 * Math.sqrt(1 - oneSquared - twoSquared));
-		float yval = (float)(2 * randX2 * Math.sqrt(1 - oneSquared - twoSquared));
-		float zval = (float)(1 - 2 * (oneSquared + twoSquared));
+		float zval = (float)(2 * randX2 * Math.sqrt(1 - oneSquared - twoSquared));
+		float yval = (float)(1 - 2 * (oneSquared + twoSquared));
+		if (xval > 0){
+			posValues.x++;
+		}
+		if (yval > 0){
+			posValues.y++;
+		}
+		if (zval > 0){
+			posValues.z++;
+		}
+		
+		if (xval < 0){
+			negValues.x++;
+		}
+		if (yval < 0){
+			negValues.y++;
+		}
+		if (zval < 0){
+			negValues.z++;
+		}
 		Vector3f vec = new Vector3f(xval, yval, zval);
-		vec.scale(mag);
+		//System.out.print("Vec length: " + vec.length());
+		vec.scale(m);
+		//System.out.println(" Final length: " + vec.length());
 		return vec;
 	}
 	
@@ -717,7 +611,7 @@ public class SegmentedCell implements SimObject{
 	public TraffickingInfo getTraffickInfo(int pro, int id){
 		if (traffickRates.containsKey(pro)){
 			TraffickingInfo ti = traffickRates.get(pro);
-			long sec = (long)(ti.getSecretionRate() * triangleAreas[id]/surfaceArea);
+			float sec = (ti.getSecretionRate() * triangleAreas[id]/surfaceArea);
 			return new TraffickingInfo(sec, ti.getUnboundIntRate(), ti.getBoundIntRate());
 		}
 		else{
@@ -728,6 +622,36 @@ public class SegmentedCell implements SimObject{
 	public Vector3f getColor3Vector(){
 		//draws itself, so no color vector necessary
 		return (new Vector3f(baseColor));
+	}
+	
+	public SurfaceSegment getSurfaceSegment(int index){
+		return membraneSegments[index];
+	}
+	
+	public float getSegmentArea(int index){
+		return triangleAreas[index];
+	}
+	
+	public Vector3f getSegmentWorldNormal(int index){
+		Vector3f norm = new Vector3f(triangleCenters[index]);
+		Transform myTrans = new Transform();
+		body.getMotionState().getWorldTransform(myTrans);
+		myTrans.transform(norm);
+		norm.sub(myTrans.origin);
+		norm.normalize();
+		//System.out.println("my final normal: " + norm);
+		return norm;
+	}
+	
+	public Vector3f[] getWorldCoordinates(int surface){
+		Transform myTrans = new Transform();
+		body.getMotionState().getWorldTransform(myTrans);
+		Vector3f[] myVertices = new Vector3f[3];
+		for (int i = 0; i < 3; i++){
+			myVertices[i] = new Vector3f(triangleVertices[surface][i]);
+			myTrans.transform(myVertices[i]);
+		}
+		return myVertices;
 	}
 	
 	public void setVisible(boolean v){
@@ -760,6 +684,10 @@ public class SegmentedCell implements SimObject{
 		return "Segmented Cell";
 	}
 	
+	public float getMinY(){
+		return minY;
+	}
+	
 	public void destroy(){
 		body.destroy();
 	}
@@ -776,7 +704,8 @@ public class SegmentedCell implements SimObject{
 		return sim.getProtein(id);
 	}
 	
-	public boolean specialRender(IGL gl, Transform t){
+	public boolean specialRender(IGL gl, Transform t, int m){
+		/*
 		gl.glPushMatrix();
 		t.getOpenGLMatrix(glMat);
 		gl.glMultMatrix(glMat);
@@ -785,27 +714,40 @@ public class SegmentedCell implements SimObject{
 		cellShape.processAllTriangles(drawCallback, aabbMin, aabbMax);
 		gl.glPopMatrix();
 		
-		return true;
+		//Let's draw ours and then theirs and see what happens.
+		
+		return true;*/
+		return false;
 	}
 	
 	private static class drawSegmentsCallback extends TriangleCallback {
 		private IGL gl;
 		SegmentedCell parent;
+		private int visibleID;
+		private Protein visibleProtein;
 
 		public drawSegmentsCallback(IGL gl, SegmentedCell p) {
 			this.gl = gl;
 			this.parent = p;
+			this.visibleID = this.parent.getVisibleProtein();
+			if (visibleID >= 0){
+				this.visibleProtein = this.parent.getProtein(visibleID);
+			}
 		}
 		
 		public void processTriangle(Vector3f[] triangle, int partId, int triangleIndex) {
 			float[] color = parent.getBaseColor();
-			if (parent.visibleProtein > 0){
+			
+			if (visibleID >= 0){
 				SurfaceSegment seg = parent.membraneSegments[triangleIndex];
-				float percent = seg.getProteinPercentage(parent.getVisibleProtein(), parent.showingBoundProtein());
+				float percent = seg.getProteinPercentage(visibleID, parent.showingBoundProtein());
+				//System.out.println("Segment: " + seg + " percent: " + percent);
+				color = visibleProtein.getColor();
 				for (int i = 0; i < 3; i++){
 					color[i] = color[i] * percent;
 				}
 			}
+			
 			gl.glBegin(GL11.GL_TRIANGLES);
 			gl.glColor3f(color[0], color[1], color[2]);
 			gl.glVertex3f(triangle[0].x, triangle[0].y, triangle[0].z);
@@ -821,6 +763,16 @@ public class SegmentedCell implements SimObject{
 			gl.glVertex3f(triangle[2].x, triangle[2].y, triangle[2].z);
 			gl.glVertex3f(triangle[0].x, triangle[0].y, triangle[0].z);
 			gl.glEnd();
+			/*
+			gl.glPointSize(4.0f);
+			gl.glColor3f(1.0f,  1.0f, 1.0f);
+			gl.glBegin(GL11.GL_POINTS); //starts drawing of points
+		    gl.glVertex3f(triangle[0].x, triangle[0].y, triangle[0].z);
+			gl.glVertex3f(triangle[1].x, triangle[1].y, triangle[1].z);
+			gl.glVertex3f(triangle[2].x, triangle[2].y, triangle[2].z);
+		    gl.glEnd();//end drawing of points
+		    */
+			
 		}
 	}
 
@@ -856,7 +808,7 @@ public class SegmentedCell implements SimObject{
 	}
 	
 	public static String getDataHeaders(){
-		String s = "Time Since Sim Start\tCell Type\tCell ID\txPos\tyPos\tzPos\txLastAV\tyLastAV\tzLastAV\txLastDeltaAV\tyLastDeltaAV\tzLastDeltaAV\ttheta\txLastLV\tyLastLV\txLastLV\n";
+		String s = "Time Since Sim Start\tCell Type\tCell ID\txPos\tyPos\tzPos\txLastAV\tyLastAV\tzLastAV\txLastDeltaAV\tyLastDeltaAV\tzLastDeltaAV\ttheta\txLastLV\tyLastLV\txLastLV\tCollidedSegments\n";
 		return s;
 	}
 	
@@ -864,12 +816,9 @@ public class SegmentedCell implements SimObject{
 		if (finalWritten){
 			return "";
 		}
+		String s = "";
+		s += "Segmented Cell\t" + cellType + "\t" + myId + "\n";
 		finalWritten = true;
-		Vector3f euclidDist = new Vector3f();
-		euclidDist.sub(lastPosition, initialPosition);
-		String s = "Segmented Cell (" + cellType + " id:" + myId + ")";
-		s += "\tAccumulated Distance\t" + accumulatedDistance + "\tEuclidean Distance," + euclidDist.length();
-		s+= "\tx:\tpos:"+ pos[0]+", neg:"+neg[0]+ "\ty:\tpos:"+ pos[1]+", neg:"+neg[1] + "\tz:\tpos:"+ pos[2]+", neg:"+neg[2];
 		return s;
 	}
 	
@@ -883,12 +832,19 @@ public class SegmentedCell implements SimObject{
 	
 	public void writeOutput(){
 		//also should write segment data
+		String cols = "";
+		for (int i = 0; i < numSegments; i++){
+			if (segCollided[i]){
+				cols += (i + " ");
+				segCollided[i] = false;
+			}
+		}
 		float hyp = (float)Math.sqrt(lastDeltaAV.x * lastDeltaAV.x + lastDeltaAV.z * lastDeltaAV.z);
 		float sineTheta = lastDeltaAV.z / hyp;
 		float theta = (float)Math.asin(sineTheta);
 		if (outputFile != null){
 			try{
-				outputFile.write(sim.getFormattedTime() + "\t" + cellType + "\t" + myId + "\t" + lastPosition.x + "\t" + lastPosition.y + "\t" + lastPosition.z + "\t" + lastAV.x + "\t" + lastAV.y +"\t" + lastAV.z + "\t" + lastDeltaAV.x +"\t" + lastDeltaAV.y +"\t" + lastDeltaAV.z + "\t" + theta + "\t" + lastLV.x + "\t" + lastLV.y + "\t" + lastLV.z +"\n");
+				outputFile.write(sim.getFormattedTime() + "\t" + cellType + "\t" + myId + "\t" + lastPosition.x + "\t" + lastPosition.y + "\t" + lastPosition.z + "\t" + lastAV.x + "\t" + lastAV.y +"\t" + lastAV.z + "\t" + lastDeltaAV.x +"\t" + lastDeltaAV.y +"\t" + lastDeltaAV.z + "\t" + theta + "\t" + lastLV.x + "\t" + lastLV.y + "\t" + lastLV.z +"\t" + cols +"\n");
 			}
 			catch(IOException e){
 				sim.writeToLog(sim.getFormattedTime() + "\t" + "Unable to write to cell file" + "\t" + e.toString());
@@ -948,5 +904,29 @@ public class SegmentedCell implements SimObject{
 		
 	}
 	
+	private static class triangleVerticesOutputCallback extends TriangleCallback {
+		SegmentedCell parent;
+		Transform myTrans;
+
+		public triangleVerticesOutputCallback(SegmentedCell p, Transform t) {
+			this.parent = p;
+			myTrans = new Transform(t);
+		}
+		
+		public void processTriangle(Vector3f[] triangle, int partId, int triangleIndex) {
+			String s = "Triangle " + triangleIndex + ": ";
+			Vector3f[] myVertices = new Vector3f[3];
+			for (int i = 0; i < 3; i++){
+				myVertices[i] = new Vector3f(triangle[i]);
+				myTrans.transform(myVertices[i]);
+				s += myVertices[i];
+				if (i < 2){
+					s+= ", ";
+				}
+			}
+			System.out.println(s);	
+		}
+		
+	}
 
 }

@@ -16,6 +16,10 @@
 package cellSim2;
 
 
+import com.bulletphysics.collision.shapes.BoxShape;
+import com.bulletphysics.collision.shapes.CollisionShape;
+import com.bulletphysics.collision.shapes.CompoundShape;
+import com.bulletphysics.demos.opengl.GLShapeDrawer;
 import com.bulletphysics.demos.opengl.IGL;
 import com.bulletphysics.linearmath.Transform;
 import javax.vecmath.Vector3f;
@@ -28,10 +32,12 @@ import org.lwjgl.opengl.GL11;
 public class GradientWall extends Wall {
 	protected Gradient grad;
 	private int drawnSegments;
-	private float[] glMat = new float[16];
-	private Vector3f startPoint;
 	protected float[] wallColor = {1.0f, 0.2f, 0.2f, 1f};
 	protected float distanceFromSource = 0f;
+	protected CompoundShape gradWallShape;
+	protected Vector3f[] segColors;
+	protected long lastUpdate = 0;
+	protected long secBetweenUpdates = 10 * 1000000;
 	
 	
 	public GradientWall(Simulation s, float w, float h, float d, Vector3f o, Gradient g) {
@@ -41,10 +47,23 @@ public class GradientWall extends Wall {
 		if (w < drawnSegments){
 			drawnSegments = (int)w;
 		}
-		//System.out.println("Size: " + size + " origin: " + origin);
-		//startPoint = new Vector3f(-(float)(size.x/2.0)+o.x, (float)(size.y/2.0)+o.y, (float)(size.z/2.0)+o.z);
-		startPoint = new Vector3f(-(float)(size.x/2.0)+o.x, (float)(size.y/2.0)+o.y, (float)(size.z/2.0));
-		//System.out.println(this.id);
+		//System.out.println("GW 50: Making gradient wall");
+		//TODO Make this work for other axes. For now it's just x!
+		segColors = new Vector3f[drawnSegments];
+		float segWidth = w / drawnSegments;
+		Vector3f halfex = new Vector3f(segWidth/2, h/2, d/2);
+		BoxShape sectionShape = new BoxShape(halfex);
+		gradWallShape = new CompoundShape();
+		for (int i = 0; i < drawnSegments; i++){
+			Vector3f p = new Vector3f(o.x-w/2+i*segWidth+segWidth/2, o.y, o.z);
+			//System.out.println(i + ": " + p);
+			Transform t = new Transform();
+			t.setIdentity();
+			t.origin.set(p);
+			gradWallShape.addChildShape(t, sectionShape);
+			segColors[i] = new Vector3f();
+		}
+		//updateColors();
 	}
 
 	public GradientWall(Simulation s, float w, float h, float d, Vector3f o) {
@@ -57,80 +76,48 @@ public class GradientWall extends Wall {
 	}
 	
 	public void setDistFromSource(float dist){
-		distanceFromSource = dist;
+		this.distanceFromSource = dist;
+		updateColors();
 	}
-
-	public boolean specialRender(IGL gl, Transform t){
+	
+	private void updateColors(){
+		if (grad == null){
+			return;
+		}
+		long now = sim.getCurrentTimeMicroseconds();
+		float startDist = this.origin.x - this.size.x/2;
+		Transform t = new Transform();
+		Vector3f pos = new Vector3f();
+		if (lastUpdate < 1 ||now - lastUpdate > secBetweenUpdates){
+			//System.out.println("startDist: " + startDist + " dist from source: " + distanceFromSource);
+			//update the Colors for each wall segment
+			for (int i = 0; i < drawnSegments; i++){
+				gradWallShape.getChildTransform(i, t);
+				float dist = (t.origin.x - startDist) + this.distanceFromSource;
+				pos.x = dist;
+				pos.y = t.origin.y;
+				pos.z = t.origin.z;
+				//System.out.println("x pos" + t.origin.x + " dist: " + dist);
+				segColors[i] = new Vector3f(grad.getColor(grad.getConcentration(now, pos)));
+			}
+			lastUpdate = now;
+		}
+	}
+	
+	@Override
+	public boolean specialRender(IGL gl, Transform t, int mode){
 		if (grad == null){
 			return false;
 		}
-		
-		//get the time 
-		long ti = sim.getCurrentTimeMicroseconds();
-		int axis = grad.getAxis();
-		
-		float[] wallSize = new float[3];
-		getSize().get(wallSize);
-		float blockSize = wallSize[axis]/(float)drawnSegments;
-		
-		float[] diagonal = new float[3];
-		switch(axis){
-			case 0:
-				diagonal[0] = -blockSize;
-				diagonal[1] = -wallSize[1];//height
-				diagonal[2] = 0;
-				break;
-			case 1:
-				diagonal[0] = wallSize[0];//width
-				diagonal[1] = blockSize;
-				diagonal[2] = 0;
-				break;
-			case 2:
-				diagonal[0] = 0;
-				diagonal[1] = wallSize[1];
-				diagonal[2] = blockSize;
-				break;
-		}
-		Vector3f diagonalVector = new Vector3f(diagonal);
-		//System.out.println(diagonalVector);
-
-		float[] nextPos = new float[]{0f, 0f, 0f};
-		nextPos[axis] = blockSize;
-		Vector3f nextPositionVector = new Vector3f(nextPos);
-		//System.out.println(nextPositionVector);
-		
-		float[] dist = new float[]{0f, 0f, 0f};
-		dist[axis] = distanceFromSource;
-		Vector3f distVector = new Vector3f(dist);
-		
-		gl.glPushMatrix();
-		
-		t.getOpenGLMatrix(glMat);
-		gl.glMultMatrix(glMat);
-		GL11.glNormal3f( 0f, 0f, -1f); 
-		Vector3f vecOne = new Vector3f(startPoint);
-		Vector3f vecTwo = new Vector3f(vecOne);
-		vecTwo.add(diagonalVector);
+		//System.out.println("GW 112: Special render");
+		updateColors();
+		Transform tran = new Transform(t);
+		//render each of the underlying boxes
 		for (int i = 0; i < drawnSegments; i++){
-			//Find the concentration at this time and position
-			//System.out.println("VecOne: " + vecOne + " VecTwo: " + vecTwo);
-			Vector3f gradPos = new Vector3f();
-			gradPos.add(vecOne, distVector);
-			float[] color = grad.getColor(grad.getConcentration(ti, gradPos));
-			GL11.glColor3f(color[0], color[1], color[2]);
-			GL11.glBegin(GL11.GL_QUADS);
-			//System.out.println(i + "ri: " + ri + " le: " + le + " con: " + con + " mi: " + mi);
-			GL11.glVertex3f(vecOne.x, vecOne.y, vecOne.z);
-			GL11.glVertex3f(vecTwo.x, vecOne.y, vecTwo.z);
-			GL11.glVertex3f(vecTwo.x, vecTwo.y, vecTwo.z);
-			GL11.glVertex3f(vecOne.x, vecTwo.y, vecOne.z);
-			GL11.glEnd();
-			vecOne.add(nextPositionVector);
-			vecTwo.add(vecOne, diagonalVector);
-			//System.out.println(startPoint + ", " + vecOne + ", " +addOnVector +", "+ vecTwo);
+			CollisionShape cs = gradWallShape.getChildShape(i);
+			gradWallShape.getChildTransform(i, tran);
+			GLShapeDrawer.drawOpenGL(gl, tran, cs, segColors[i], mode);
 		}
-		gl.glPopMatrix();
-		
 		return true;
 		//return false;
 	}
@@ -139,6 +126,11 @@ public class GradientWall extends Wall {
 	public String getType(){
 		String s = "GradientWall";
 		return s;
+	}
+	
+	@Override
+	public String toString(){
+		return "I am gradient wall " + getID();
 	}
 
 }

@@ -44,7 +44,7 @@ public interface SimObject {
 		public void destroy();
 		public void markForRemoval();
 		public boolean isMarked();
-		public boolean specialRender(IGL gl, Transform t);
+		public boolean specialRender(IGL gl, Transform t, int m);
 		public boolean isBound();
 		public void clearBound();
 		public void bind();
@@ -52,6 +52,10 @@ public interface SimObject {
 		public void wrapup();
 		public void setOutputFile(BufferedWriter bw);
 		public void writeOutput();
+		public SurfaceSegment getSurfaceSegment(int index);
+		public float getSegmentArea(int index);
+		public Vector3f getSegmentWorldNormal(int index);
+		public Vector3f[] getWorldCoordinates(int surface);
 		public String getSurfaceSegmentOutput();
 		public TraffickingInfo getTraffickInfo(int protein, int id);
 		public int getVisibleProtein();

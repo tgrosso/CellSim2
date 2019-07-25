@@ -25,10 +25,11 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map.Entry;
-import java.util.ArrayList;
+import java.util.Set;
 import javax.vecmath.Vector3f;
 
 
@@ -51,6 +52,41 @@ public class Defaults {
 		defaults.put("startX", new String[]{"0"});
 		defaults.put("molsPerBond", new String[]{"100"});
 	}
+	
+	private static final HashMap<String, String> defaultTitles = new HashMap<String, String>();
+	static{
+		defaultTitles.put("TimeZone", "Time Zone");
+		defaultTitles.put("screenWidth", "Screen Width (pixels)");
+		defaultTitles.put("screenHeight", "Screen Height (pixels)");
+		defaultTitles.put("endTime", "End Time (seconds)");
+		defaultTitles.put("displayImages", "Display Images");
+		defaultTitles.put("vessel", "Vessel Size (x, y, z pixels)");
+		defaultTitles.put("vesselColor", "Vessel Color (r, g, b)");
+		defaultTitles.put("distFromSource", "Distance from Source (microns)");
+		defaultTitles.put("generateImages", "Generate Images");
+		defaultTitles.put("secBetweenOutput", "Seconds Betwen Data Output");
+		defaultTitles.put("secBetweenImages", "Seconds Between Image Output");
+		defaultTitles.put("speedUp", "Acceleration Value");
+		defaultTitles.put("startX", "startX - What is this?");
+		defaultTitles.put("molsPerBond", "Molecules Per Bond");
+		defaultTitles.put("Name", "Name or Type");
+		defaultTitles.put("numCells", "Number of Cells");
+		defaultTitles.put("cellDetailLevel", "Cell Detail Level (1-3)");
+		defaultTitles.put("radius", "Cell Radius (microns)");
+		defaultTitles.put("density", "Cell Density (g/ml)");
+		defaultTitles.put("maxDeltaVel", "Maximum Cell Velocity Change");
+		defaultTitles.put("bindsToSurface", "Binds to Surfaces");
+		defaultTitles.put("membraneBound", "Binds to Cell Membranes");
+		defaultTitles.put("diffusible", "Diffuses in Solution");
+		defaultTitles.put("halflife", "Half-life");
+	}
+	
+	private static final String[] paramOrder = new String[] {"TimeZone", "", "endTime", "secBetweenOutput", "secBetweenImages", "", "screenWidth", "screenHeight", "", 
+				"molsPerBond"};
+	
+	private static final String[] cellOrder = new String[] {"TimeZone"};
+	private static final String[] proteinOrder = new String[] {"TimeZone"};
+	
 	
 	private static final HashMap<String, String> cellDefaults = new HashMap<String, String>();
 	static{
@@ -141,9 +177,9 @@ public class Defaults {
 						continue;
 					}
 					value = Arrays.copyOfRange(value, 1, value.length);
-					//System.out.println("Gradient value:");
+					//System.out.println("Defaults 144: Gradient value:");
 					//for (int x = 0; x < value.length; x++){
-					//	System.out.println("   "+value[x]);
+					//	System.out.println("Defaults 146:   "   +value[x]);
 					//}
 					//see if the gradient for this protein already exists
 					//if not make it with the values
@@ -158,8 +194,9 @@ public class Defaults {
 					
 					continue;
 				}
+				//System.out.println("Defaults 161");
 				if (var.equals("wall")){
-					//System.out.println("var is wall");
+					//System.out.println("Defaults 163: var is wall");
 					if (value.length < 2){
 						System.err.println("Badly formatted input. Wall does not have enough arguments");
 						System.err.println("Correct format: wall<tab>ID number<tab>params");
@@ -323,6 +360,14 @@ public class Defaults {
 		return walls;
 	}
 	
+	public String getStringTitle(String val){
+		String s = "Title not found";
+		if (defaultTitles.containsKey(val)){
+			s = defaultTitles.get(val);
+		}
+		return s;
+	}
+	
 	public boolean getValue(boolean b, String key) throws SimException{
 		if (!defaults.containsKey(key)){
 			throw new SimException("Variable " + key + " not found in default list.");
@@ -440,6 +485,22 @@ public class Defaults {
 			
 		}
 		return new Vector3f(f);
+	}
+
+	
+	public String[] getParamList(String type){
+		if (type == "Param"){
+			return paramOrder;
+		}
+		else if (type == "Cell"){
+			return cellOrder;
+		}
+		else if (type == "Protein"){
+			return proteinOrder;
+		}
+		int n = defaults.keySet().size();
+		String [] ret = new String[n]; 
+		return defaults.keySet().toArray(ret);
 	}
 
 }

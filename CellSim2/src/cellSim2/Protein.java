@@ -44,7 +44,8 @@ public class Protein {
 	private float[] bindingRates;
 	private float[] reverseRates;
 	private float[] bondLengths;
-	private float[] bondLifetimes;
+	private float[] timesToStable
+	;
 	private float[] color;
 	public static int MOLS_PER_BOND = 100;
 
@@ -72,7 +73,7 @@ public class Protein {
 		bindingRates = new float[0];
 		reverseRates = new float[0];
 		bondLengths = new float[0];
-		bondLifetimes = new float[0];
+		timesToStable = new float[0];
 		ligandInfo = new String[0][];
 		//Read in values from given input file
 		try{
@@ -83,7 +84,7 @@ public class Protein {
 		}
 		decayRate = halflife / 0.693147180559945f;//TODO WTF?
 		color = SimGenerator.colorList[myId%SimGenerator.colorList.length];
-		//System.out.println("Protein id " + myId + " " + name + " color: " + color[0] + ", " + color[1] + ", " + color[2]);
+		//System.out.println("Protein86: Protein id " + myId + " " + name + " color: " + color[0] + ", " + color[1] + ", " + color[2]);
 	}
 	
 	public void readInputFile(String filename) throws IOException{
@@ -111,7 +112,7 @@ public class Protein {
 				if (var.compareTo("ligand")==0){
 					if (valueVar.length < 6){
 						System.err.println("Ligand info should have 6 values. Found " + valueVar.length);
-						System.err.println("Usage: ligand<tab>ProteinName<tab>ForwardBindingRate<tab>ReverseBindingRate<tab>BondLength<tab>BondLifetime");
+						System.err.println("Usage: ligand<tab>ProteinName<tab>ForwardBindingRate<tab>ReverseBindingRate<tab>BondLength<tab>TimeToStableBond");
 						continue;
 					}
 					//Add the information string to ligandInfo
@@ -193,6 +194,15 @@ public class Protein {
 		color = c;
 	}
 	
+	public int proteinIndex(int proID){
+		for (int i = 0; i < ligands.length; i++){
+			if (ligands[i] == proID){
+				return i;
+			}
+		}
+		return -1;
+	}
+	
 	public int bindsTo(int pro){
 		for (int i = 0; i < ligands.length; i++){
 			if (ligands[i] == pro){
@@ -218,8 +228,8 @@ public class Protein {
 		return bondLengths[index];
 	}
 	
-	public float getBondLifetime(int index){
-		return bondLifetimes[index];
+	public float getTimeToStable(int index){
+		return timesToStable[index];
 	}
 	
 	public void setLigands(SimGenerator sim){
@@ -238,25 +248,26 @@ public class Protein {
 			else{
 				//insert the information
 				try{
-					float br = Float.parseFloat(info[2]);
-					float rr = Float.parseFloat(info[3]);
+					//All rates should be stored as per microsecond!
+					float br = Float.parseFloat(info[2])/6e7f;
+					float rr = Float.parseFloat(info[3])/6e7f;
 					float bLen = Float.parseFloat(info[4]);
-					float bLife = Float.parseFloat(info[5]);
+					float bSta = Float.parseFloat(info[5]);
 					int[] ligs = Arrays.copyOf(ligands, ligands.length+1);
 					float[] bRate = Arrays.copyOf(bindingRates, ligands.length+1);
 					float[] rRate = Arrays.copyOf(reverseRates, ligands.length+1);
 					float[] bLength = Arrays.copyOf(bondLengths, ligands.length+1);
-					float[] bLifetime = Arrays.copyOf(bondLifetimes, ligands.length+1);
+					float[] bStable = Arrays.copyOf(timesToStable, ligands.length+1);
 					ligs[ligands.length] = proId;
 					bRate[ligands.length] = br;
 					rRate[ligands.length] = rr;
 					bLength[ligands.length] = bLen;
-					bLifetime[ligands.length] = bLife;
+					bStable[ligands.length] = bSta;
 					ligands = ligs;
 					bindingRates = bRate;
 					reverseRates = rRate;
 					bondLengths = bLength;
-					bondLifetimes = bLifetime;
+					timesToStable = bStable;
 				}catch(NumberFormatException e){
 					System.err.println("Error adding ligand: " + proName + ". Number format exception");
 					System.err.println(e.toString());
@@ -265,7 +276,7 @@ public class Protein {
 		}
 		//System.out.println("Ligands for " + name);
 		//for (int i = 0; i < ligands.length; i++){
-			//System.out.println("ID: " + ligands[i] + " Name: " + sim.getProteinName(ligands[i]) + " forward rate: "+ bindingRates[i] + " reverse rate: " + reverseRates[i] + " bondLength: " + bondLengths[i]+ " bondLifetimes: " + bondLifetimes[i]);
+			//System.out.println("ID: " + ligands[i] + " Name: " + sim.getProteinName(ligands[i]) + " forward rate: "+ bindingRates[i] + " reverse rate: " + reverseRates[i] + " bondLength: " + bondLengths[i]+ " timeToStable: " + timesToStable[i]);
 		//}
 	}
 	

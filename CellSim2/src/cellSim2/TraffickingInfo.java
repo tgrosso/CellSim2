@@ -11,11 +11,12 @@ public class TraffickingInfo {
 		this(0, 0, 0);
 	}
 	
-	public TraffickingInfo(long s, float u, float b){
-		//data are read as per minute, and converted to per microseconds
-		secretionRate = (float)(s * (6.0e-7));
-		unboundInternalizationRate = (float)(u * (6.0e-7));
-		boundInternalizationRate = (float)(b * (6.0e-7));
+	public TraffickingInfo(float s, float u, float b){
+		//secretion rate should be for this unit (cell or segment)
+		//time units should be per microseconds
+		secretionRate = s;
+		unboundInternalizationRate = u;
+		boundInternalizationRate = b;
 	}
 	
 	public float getSecretionRate(){

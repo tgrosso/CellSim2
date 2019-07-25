@@ -210,6 +210,7 @@ public class Wall implements SimObject{
 	}
 	
 	public float getSurfaceArea(int surface){
+		//System.out.println("I'm a wall. Surface: " + surface + " my size is " + size);
 		switch (surface){
 		case 0:
 		case 1://FRONT or BACK - area is width * height
@@ -222,6 +223,10 @@ public class Wall implements SimObject{
 		}
 	}
 	
+	public float getSegmentArea(int index){
+		return getSurfaceArea(index);
+	}
+	
 	public Gradient getGradient(int pro){
 		return sim.getGradient(pro);
 	}
@@ -229,6 +234,20 @@ public class Wall implements SimObject{
 	public Vector3f getNormal(int surface){
 		return normals[surface];
 	}
+	
+	public Vector3f getSegmentWorldNormal(int index){
+		Transform myTrans = new Transform();
+		body.getMotionState().getWorldTransform(myTrans);
+		//System.out.println("My basis: " + myTrans.basis);
+		Vector3f myNormal = new Vector3f(normals[index]);
+		//System.out.println("my Wall Normal: " + myNormal);
+		myTrans.transform(myNormal);
+		myNormal.sub(myTrans.origin);
+		myNormal.normalize();
+		//System.out.println("My final normal" + myNormal);
+		return myNormal;
+	}
+	
 	public Vector3f[] getWorldCoordinates(int surface){
 		Vector3f[] vertices = new Vector3f[4];
 		switch(surface){
@@ -376,6 +395,7 @@ public class Wall implements SimObject{
 	
 	public void collided(SimObject c, ManifoldPoint pt, long collId){
 		//Walls don't do collisions. The other object will collide with the wall
+		System.out.println("Collided: Wall");
 	}
 	
 	public boolean collidedWith(SimObject s){
@@ -390,82 +410,8 @@ public class Wall implements SimObject{
 		collidedObjects = new ObjectArrayList<SimObject>();
 	}
 	
-	public boolean specialRender(IGL gl, Transform t){
+	public boolean specialRender(IGL gl, Transform t, int m){
 		return false;
-		/*
-		//System.out.println("Wall id: " + id + " segments: " + segments.length + " protein id " + visibleProtein);
-		if (segments.length == 0 || visibleProtein < 0){
-			//No proteins or no visible protein - Just color it as is.
-			return false;
-		}
-		boolean proteinOnSegments = false;
-		for (int i = 0; i < segments.length; i++){
-			//System.out.println("index of protein): " + segments[i].getProteinIndex(visibleProtein));
-			if (segments[i].getProteinIndex(visibleProtein) >= 0){
-				proteinOnSegments = true;
-				break;
-			}
-		}
-		if (!proteinOnSegments){
-			return false;
-		}
-		//So this wall has at least one segment with the visible protein on it
-		//Now we need a special render
-		/*
-		float[][] boxColors = new float[6][];
-		//set all walls to base color
-		for (int i = 0; i < 6; i++){
-			boxColors[i] = wallColor;
-		}
-		//Set every segment with the visible protein to the appropriate color
-		for (int i = 0; i < segments.length; i++){
-			int vis_index = segments[i].getProteinIndex(visibleProtein);
-			if (vis_index < 0){
-				continue;
-			}
-			float percent = segments[i].getProteinPercentage(visibleProtein, bound);
-			float[] newColor = new float[3];
-			for (int j = 0; j < 3; j++){
-				newColor[j] = Math.min(1 - percent + visibleColor[j] * percent, 1);
-			}
-			boxColors[segments[i].getID()] = newColor;
-		}
-		gl.glPushMatrix();
-		
-		t.getOpenGLMatrix(glMat);
-		gl.glMultMatrix(glMat);
-		GL11.glNormal3f( 0f, 1f, 0f); 
-
-		//System.out.println("Drawing wall number: " + id);
-		for (int surf = 0; surf < 6; surf++){
-			//Set the color
-			
-			GL11.glBegin(GL11.GL_QUADS);
-			GL11.glColor3f(boxColors[surf][0], boxColors[surf][1], boxColors[surf][2]);
-			
-			//Get the initial point
-			//System.out.println("Suface: "+ surf);
-			int[] vec = new int[3];
-			for (int i = 0; i < 3; i++){
-				vec[i] = pointVec[surf][0][i];
-				//System.out.print("\t"+vec[i] + "\t");
-			}
-			//System.out.println("");
-			GL11.glVertex3f(drawingVectors[vec[0]][0], drawingVectors[vec[1]][1], drawingVectors[vec[2]][2]);
-			//System.out.println(drawingVectors[vec[0]][0]+ ", " + drawingVectors[vec[1]][1] + ", " + drawingVectors[vec[2]][2]);
-			//Make the next three points
-			for (int j = 0; j < 3; j++){
-				int changeCoord = pointVec[surf][1][j];
-				vec[changeCoord] = (vec[changeCoord] + 1)%2;
-				GL11.glVertex3f(drawingVectors[vec[0]][0], drawingVectors[vec[1]][1], drawingVectors[vec[2]][2]);
-				//System.out.println(drawingVectors[vec[0]][0]+ ", " + drawingVectors[vec[1]][1] + ", " + drawingVectors[vec[2]][2]);
-			}
-			GL11.glEnd();
-			//System.out.println("");
-		}
-		gl.glPopMatrix();
-		return true;
-		*/
 	}
 	
 	public int getID(){

@@ -273,9 +273,9 @@ public class TestRunner {
 						String[] values = Arrays.copyOfRange(paramVar,  2,  paramVar.length);
 						//System.out.println("Reading in cell parameters: ");
 						//System.out.println("param: " + param);
-						//for (int k = 0; k < values.length; k++){
-						//	System.out.println("\t" + values[k]);
-						//}
+						for (int k = 0; k < values.length; k++){
+							System.out.println("\t" + values[k]);
+						}
 						paramMap.put(param,  values);
 						continue;
 					}
@@ -362,14 +362,16 @@ public class TestRunner {
 			
 			//make a directory for this set of parameters
 			String dirName = "defaults_";
+			//System.out.println("Param length: " + params.length);
 			if (params.length > 0){
 				dirName = "";
 			}
 			for (int i = 0; i < params.length; i++){
 				String[] vals = (String[])paramMap.get(params[i]);
 				String val = vals[valueIds[i]];
+				//System.out.println("val : " + val);
 				//TODO Unit test - value_ids should not be null here
-				//System.out.print(params[i] + ": " + val + " ");
+				//System.out.println(params[i] + ": " + val + " ");
 				String var = params[i];
 				//TODO This should be generalized for any parameter like this
 				if (params[i].startsWith("cell") || params[i].startsWith("protein")){
@@ -381,20 +383,42 @@ public class TestRunner {
 					if (dot >=0){
 						val = val.substring(0,  dot);
 					}
+					
 				}
-				if (var.length()>=4){
-					var = var.substring(0, 4);
+				if (var.indexOf('\t') > 0){
+					var = var.substring(0, var.indexOf('\t'));
 				}
+				if (var.length()>=7){
+					var = var.substring(0, 7);
+				}
+				//System.out.println("And now val is " + val + " and var is " + var + ".");
 				dirName = dirName + var + "_" + val + "_";
 			}
 			dirName = dirName.substring(0, dirName.length()-1);//drop the trailing _
-			if (!dirNames.containsKey(dirName)){
-				dirNames.put(dirName, new Integer(1));
+			//System.out.println("And dirName = " + dirName);
+			if (dirNames.containsKey(dirName)){
+				//System.out.println("dirName is already made");
+				//Find last instance of dirName - first one is just dirName with index of 0
+				int lastIndex = 1;
+				boolean valueSet = false;
+				while (!valueSet){
+					String testDir = dirName + "(" + lastIndex + ")";
+					if (dirNames.containsKey(testDir)){
+						//System.out.println(testDir + " is already made.");
+						lastIndex++;
+						continue;
+					}
+					else{
+						//testDir has not been entered. Enter it
+						dirName = testDir;
+						dirNames.put(dirName, new Integer(lastIndex));
+						valueSet = true;
+					}
+				}
+				
 			}
 			else{
-				int v = dirNames.get(dirName);
-				dirName = dirName + "(" + v + ")";
-				dirNames.replace(dirName, new Integer(v+1));
+				dirNames.put(dirName,  new Integer(0));
 			}
 			//System.out.println("DirectoryName: " + dirName + " run " + runNum);
 			File paramDir = new File(outputDir, dirName);
@@ -511,16 +535,17 @@ public class TestRunner {
 	
 class GeneratorThread implements Runnable{
 	private String infile, outfile;
-	private ArrayList<String> command;
+	private ArrayList<String> command, genVid;
 		
 	public GeneratorThread(String i, String o){
 		infile = i;
 		outfile = o;
 		command = new ArrayList<String>();
-		command.add("java");
-		command.add("-cp");
-		command.add(".:/Users/terri/Documents/javaLibraries/lwjgl-2.9.3/jar/lwjgl.jar:/Users/terri/Documents/javaLibraries/lwjgl-2.9.3/jar/lwjgl_util.jar:/Users/terri/Documents/javaLibraries/jbullet-20101010/dist/jbullet.jar:/Users/terri/Documents/javaLibraries/jbullet-20101010/dist/jbullet-demos.jar:/Users/terri/git/CellSim2/bin/:");
-		command.add("-Djava.library.path=/Users/terri/Documents/javaLibraries/lwjgl-2.9.3/native/macosx/");			
+		command.add("/Library/Java/JavaVirtualMachines/jdk1.8.0_91.jdk/Contents/Home/bin/java");
+		command.add("-Djava.library.path=/Users/terri/Documents/javaLibraries/lwjgl-2.9.3/native/macosx");
+		command.add("-Dfile.encoding=UTF-8");
+		command.add("-classpath");
+		command.add("/Users/terri/git/CellSim2/bin:/Users/terri/Documents/javaLibraries/jbullet-20101010/lib/vecmath/vecmath.jar:/Users/terri/Documents/javaLibraries/lwjgl-2.9.3/jar/jinput.jar:/Users/terri/Documents/javaLibraries/lwjgl-2.9.3/jar/lwjgl.jar:/Users/terri/Documents/javaLibraries/jbullet-20101010/dist/jbullet-demos.jar:/Users/terri/Documents/javaLibraries/jbullet-20101010/dist/jbullet.jar:/Users/terri/Documents/javaLibraries/jbullet-20101010/lib/ASM3.1/asm-all-3.1.jar:/Users/terri/Documents/javaLibraries/jbullet-20101010/lib/jstackalloc/stack-alloc.jar:/Users/terri/Documents/javaLibraries/jbullet-20101010/lib/swing-layout/swing-layout-1.0.3.jar:/Users/terri/Documents/javaLibraries/lwjgl-2.9.3/jar/lwjgl_util.jar");
 		command.add("cellSim2.SimGenerator");
 		command.add(infile);
 		command.add(outfile);

@@ -30,7 +30,6 @@ import com.bulletphysics.collision.dispatch.DefaultCollisionConfiguration;
 import com.bulletphysics.collision.narrowphase.PersistentManifold;
 import com.bulletphysics.collision.narrowphase.ManifoldPoint;
 import com.bulletphysics.ContactAddedCallback;
-import com.bulletphysics.demos.basic.BasicDemo;
 import com.bulletphysics.demos.opengl.DemoApplication;
 import com.bulletphysics.demos.opengl.IGL;
 import com.bulletphysics.demos.opengl.GLShapeDrawer;
@@ -78,15 +77,18 @@ public class Simulation extends DemoApplication{
 	private boolean render = true, finished = false;
 	private SimGenerator simValues;
 	//private long oldTime, currentTime, startTime, clockTime, lastDataOutput, deltaTime;
-	private long realCurrentTime, realDeltaTime, realStartTime, simCurrentTime, simDeltaTime, simStartTime, lastDataOutput, delayTime;
+	private long realCurrentTime, realDeltaTime, realStartTime, simCurrentTime, simDeltaTime, simStartTime, lastDataOutput;
+	private long lastImageTime;
 	private float averageDeltaTime;
 	private long numFrames;
-	private SimObject[][] processedCollisions;
+	private long randomCalls;
+	//private SimObject[][] processedCollisions;
 	
 	private Random random;
 	
 	private BufferedWriter logFile, cellData, wallData, gradientTestFile, constraintFile, segmentData;
 	private ObjectArrayList<BufferedWriter> gradientDataFiles;
+	private File imageFile;
 	
 	int testWidth;
 	
@@ -103,15 +105,15 @@ public class Simulation extends DemoApplication{
 		lastDataOutput = -1;
 		averageDeltaTime = 0f;
 		numFrames = 0;
-		delayTime = 4 * 1000000;
+		randomCalls = 0;
 		
 		simCurrentTime = realStartTime;
-		simDeltaTime = (long)(1000000/60f) * simValues.speedUp;
+		simDeltaTime = (long)(1000000f/60) * simValues.speedUp;
+		//Delta time in microseconds
+		//System.out.println("Sim Delta Time: " + simDeltaTime);
 		simStartTime = realCurrentTime;
+		lastImageTime = -1;
 		
-		
-		//TODO ImageGenerator is just a stub right now
-		imageGen = new ImageGenerator();
 		
 		random = new Random();
 		gradientDataFiles = new ObjectArrayList<BufferedWriter>();
@@ -132,39 +134,37 @@ public class Simulation extends DemoApplication{
 				gradData.write(simValues.gradients.get(i).getDataHeaders());
 				g.setOutputFile(gradData);
 			}
+			/*
 			gradientTestFile = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "gradientTest.csv")));
 			String str = "Time Since Start\tProtein";
 			for (int i = 0; i < testWidth; i+=100){
 				str += "\t" + i;
 			}
 			str += "\n";
-			gradientTestFile.write(str);
+			gradientTestFile.write(str);*/
 			constraintFile = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "constraintData.csv")));
 			constraintFile.write(BondConstraint.getDataHeaders());
 			segmentData = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "segmentData.csv")));
 			segmentData.write("Time Since Start\tParent Object\tSegment ID\tProtein\tUnbound Receptors\tBound Receptors\n");
+			if (simValues.generateImages){
+				imageFile = new File(simValues.getOutputDir(), "Images");
+				if (!imageFile.exists()){
+					imageFile.mkdir();
+				}
+			}
 		}
 		catch (IOException e){
 			System.err.println("Cannot generate output files!");
+			System.err.println(e.getMessage());
+		}
+		
+		if(imageFile != null){
+			imageGen = new ImageGenerator(imageFile, simValues.screenWidth, simValues.screenHeight, 4);
 		}
 		
 		BulletGlobals.setContactAddedCallback(new SimContactAddedCallback());
-		processedCollisions = new SimObject [0][2];
+		//processedCollisions = new SimObject [0][2];
 		writeToLog(getFormattedTime() + "\tInitialization Complete");
-		
-		//Shit - Why am I doing this?
-		//TODO Figure out what I am doing this!!
-		/*
-		Protein integ = getProtein(getProteinId("Integrin"));
-		int lam = getProteinId("Laminin");
-		int[] ids = integ.getLigands();
-		for (int i = 0; i < ids.length; i++){
-			if (ids[i] == lam){
-				//System.out.println("Integrin/Laminin Bond Length " + integ.getBondLength(i));
-			}
-		}*/
-			
-		
 	}
 	
 	@Override
@@ -216,7 +216,7 @@ public class Simulation extends DemoApplication{
 	public void clientMoveAndDisplay() {
 		
 		float secSinceOutput = (float)((simCurrentTime - lastDataOutput)/(1.0e6));
-		if (simCurrentTime > delayTime && (lastDataOutput < 0 || secSinceOutput >= simValues.secBetweenOutput)){
+		if (lastDataOutput < 0 || secSinceOutput >= simValues.secBetweenOutput){
 			outputData();
 			lastDataOutput = simCurrentTime;
 		}
@@ -226,23 +226,7 @@ public class Simulation extends DemoApplication{
 		//Vector3f testVec = new Vector3f();
 		for (int i = 0; i < numObjects; i++){
 			SimObject bioObj = modelObjects.getQuick(i);
-			/*
-			if (bioObj.getType().equals("Segmented Cell")){
-				SimRigidBody b = bioObj.getRigidBody();
-				b.getCenterOfMassPosition(testVec);
-				System.out.println(getFormattedTime() + " COM Pos before update: " + testVec.toString());
-				//b.getLinearVelocity(testVec);
-				//System.out.println(getFormattedTime() + " linV before update: " + testVec.toString());
-			}*/
 			bioObj.updateObject();
-			/*
-			if (bioObj.getType().equals("Segmented Cell")){
-				SimRigidBody b = bioObj.getRigidBody();
-				b.getCenterOfMassPosition(testVec);
-				System.out.println("COM Pos after update: " + testVec.toString());
-				//b.getLinearVelocity(testVec);
-				//System.out.println(getFormattedTime() + " linV after update: " + testVec.toString());
-			}*/
 			bioObj.clearCollisions();
 			if (bioObj.isMobile()){
 				mobileObjs = true;
@@ -278,34 +262,12 @@ public class Simulation extends DemoApplication{
 		
 		// step the simulation
 		if (dynamicsWorld != null) {
-			//maxSubSteps * default frame rate (1/60) must be > time step
-			/*for (int i = 0; i < numObjects; i++){
-				SimObject bioObj = modelObjects.getQuick(i);
-				
-				if (bioObj.getType().equals("Segmented Cell")){
-					//System.out.print("object: " + bioObj.toString());
-					SimRigidBody b = bioObj.getRigidBody();
-					b.getCenterOfMassPosition(testVec);
-					System.out.println("COM Pos before step: " + testVec.toString());
-					//b.getLinearVelocity(testVec);
-					//System.out.println(getFormattedTime() + " linV before step: " + testVec.toString());
-				}
-			}*/
-			
-			float time_step = simDeltaTime / 1000000f;
-			int max_substeps = (int)Math.ceil(time_step * 60f);
-			dynamicsWorld.stepSimulation(time_step, max_substeps);
-			//System.out.println("Simulation stepped");
-			/*for (int i = 0; i < numObjects; i++){
-				SimObject bioObj = modelObjects.getQuick(i);
-				if (bioObj.getType().equals("Segmented Cell")){
-					SimRigidBody b = bioObj.getRigidBody();
-					b.getCenterOfMassPosition(testVec);
-					System.out.println("COM Pos after step: " + testVec.toString());
-					//bioObj.getRigidBody().getLinearVelocity(testVec);
-					//System.out.println(" linV after step: " + testVec.toString());
-				}
-			}*/
+			float time_step = simDeltaTime / 1000000f; //convert microseconds to seconds
+			//int max_substeps = (int)Math.ceil(simValues.speedUp+1);
+			//dynamicsWorld.stepSimulation(time_step, (simValues.speedUp+1));
+			for (int x = 0; x < simValues.speedUp; x++){
+				dynamicsWorld.stepSimulation(1f/60f);
+			}
 			// optional but useful: debug drawing
 			dynamicsWorld.debugDrawWorld();
 
@@ -345,7 +307,6 @@ public class Simulation extends DemoApplication{
 			//glutSwapBuffers();
 		}
 		
-		
 		if (simCurrentTime >= simValues.endTime*1e6){
 			finished = true;
 		}
@@ -373,7 +334,7 @@ public class Simulation extends DemoApplication{
 					RigidBody rb = bioObj.getRigidBody();
 					DefaultMotionState motionState = (DefaultMotionState)rb.getMotionState();
 					m.set(motionState.graphicsWorldTrans);
-					if (!bioObj.specialRender(gl, m)){
+					if (!bioObj.specialRender(gl, m, getDebugMode())){
 						GLShapeDrawer.drawOpenGL(gl, m, bioObj.getCollisionShape(), bioObj.getColor3Vector(), getDebugMode());
 					}
 				}
@@ -494,6 +455,7 @@ public class Simulation extends DemoApplication{
 			Gradient g = simValues.gradients.get(i);
 			g.writeOutput(this);
 			//Debugging
+			/*
 			String s = getFormattedTime() + "\t" + getProteinName(g.getProtein());
 			for (int j = 0; j < testWidth; j+=100){
 				s = s + "\t" + g.getConcentration(simCurrentTime, new Vector3f(j, 0, 0));
@@ -504,7 +466,7 @@ public class Simulation extends DemoApplication{
 			}
 			catch(IOException e){
 				System.err.println("Could not write to gradient test file");
-			}
+			}*/
 		}
 		//writeToLog("Constraints\t" + constraints.size() + "\n");
 		
@@ -523,7 +485,10 @@ public class Simulation extends DemoApplication{
 	}
 	
 	public Protein getProtein(int id){
-		return simValues.proteins.get(id);
+		if (id < simValues.proteins.size()){
+			return simValues.proteins.get(id);
+		}
+		return null;
 	}
 	
 	public int getProteinId(String name){
@@ -593,28 +558,25 @@ public class Simulation extends DemoApplication{
 	}
 	
 	public float getNextRandomF(){
+		randomCalls++;
 		return random.nextFloat();
-	}
-	
-	public boolean getNextRandomBool(){
-		return random.nextBoolean();
 	}
 	
 	public boolean readyToQuit(){
 		return finished;
 	}
 	
-	public ByteBuffer getImageBuffer(int w, int h){
-		return imageGen.getBuffer(simValues.screenWidth, simValues.screenHeight);
+	public ByteBuffer getImageBuffer(int width, int height){
+		return imageGen.getBuffer(width, height);
 	}
-	
 	public boolean timeToOutputImage(){
-		//TODO write this!
-		return false;
+		long timeSinceLastImage = (simCurrentTime - lastImageTime)/1000000;
+		return (simValues.generateImages && (lastImageTime < 0 || timeSinceLastImage > simValues.secBetweenImages) );
 	}
 	
 	public void outputImage(){
-		//TODO generate image file
+		imageGen.makeImage(getFormattedTime());
+		lastImageTime = simCurrentTime;
 	}
 	
 	public void writeToLog(String s){
@@ -637,7 +599,10 @@ public class Simulation extends DemoApplication{
 		writeToLog("\n" + getFormattedTime() + "\tFinishing Up");
 		writeToLog("Current sim time (microseconds)\t" + simCurrentTime);
 		writeToLog("Actual clock time (real microseconds)\t" + clock.getTimeMicroseconds());
-		writeToLog("Average frame time (real microseconds)\t" + averageDeltaTime);
+		writeToLog("Actual time in minutes\t" + String.format("%.3f", clock.getTimeMicroseconds()/1000000f/60f));
+		writeToLog("Mean frame time (real microseconds)\t" + averageDeltaTime);
+		writeToLog("Mean frames per second\t" + (int)(1000000/averageDeltaTime));
+		//writeToLog("Number of calls to random\t" + randomCalls);
 		int numObjects = modelObjects.size();
 		for (int i = 0; i < numObjects; i++){
 			SimObject bioObj = modelObjects.getQuick(i);
@@ -677,8 +642,8 @@ public class Simulation extends DemoApplication{
 				gradientDataFiles.get(i).flush();
 				gradientDataFiles.get(i).close();
 			}
-			gradientTestFile.flush();
-			gradientTestFile.close();
+			//gradientTestFile.flush();
+			//gradientTestFile.close();
 		}
 		catch(IOException e){
 			String s = "Unable to close output files";
@@ -703,19 +668,22 @@ public class Simulation extends DemoApplication{
 			SimRigidBody b0 = (SimRigidBody)colObj0, b1 = (SimRigidBody)colObj1;
 			SimObject s0 = b0.getParent(), s1 = b1.getParent();
 			if (s0.collidedWith(s1) | s1.collidedWith(s0)){
-				//This deliberately does NOT short circuit. It adds the other object of pair to both objects
+				//The OR deliberately does NOT short circuit. It adds the other object of pair to both objects
 				//Only deal with new contacts if they haven't been dealt with in this time step
 				return false;
 			}
-			//System.out.println("\nContact added: " + cp.positionWorldOnA + " " + cp.positionWorldOnB);
+			//System.out.println("\nContact added: positionWorldOnA" + cp.positionWorldOnA + " positionWorldOnB" + cp.positionWorldOnB);
 			if (b0.getParent().getType().equals("Wall") && !b1.getParent().getType().equals("Wall")){
-				b1.getParent().collided(b0.getParent(), cp, 0);
+				//System.out.println("b0 is wall");
+				b1.getParent().collided(b0.getParent(), cp, 1);
 			}
 			else if (b1.getParent().getType().equals("Wall") && !b0.getParent().getType().equals("Wall")){
 				b0.getParent().collided(b1.getParent(), cp, 0);
+				//System.out.println("b1 is wall");
 			}
 			else{
-				b0.getParent().collided(b1.getParent(), cp, 1);
+				b0.getParent().collided(b1.getParent(), cp, 0);
+				//System.out.println("Neither is wall");
 			}
 			
 			return true;

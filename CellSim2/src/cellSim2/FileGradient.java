@@ -54,6 +54,7 @@ public class FileGradient implements Gradient{
 	long nextTime;
 	
 	public FileGradient(int protein, String filename, float[] col) {
+		//System.out.println(filename);
 		proteinId = protein;
 		gradientSuccessful = false;
 		finalConcentrations = false;
@@ -86,9 +87,9 @@ public class FileGradient implements Gradient{
             if (lineText.length < 2){
             	throw new SimException("Gradient File must have at least one distance included");
             }
-            for (int i = 0; i < lineText.length; i++){
-            	System.out.println(lineText[i]);
-            }
+            //for (int i = 0; i < lineText.length; i++){
+            	//System.out.println(lineText[i]);
+            //}
 
             
             distances = new float[lineText.length-1];
@@ -96,9 +97,9 @@ public class FileGradient implements Gradient{
             for (int i = 1; i < lineText.length; i++){
             	distances[i-1] = Float.parseFloat(lineText[i]);
             }
-            for (int i = 0; i < distances.length; i++){
+            /*for (int i = 0; i < distances.length; i++){
             	System.out.println(distances[i]);
-            }
+            }*/
             prevConc = new float[distances.length];
             nextConc = new float[distances.length];
             
@@ -136,6 +137,7 @@ public class FileGradient implements Gradient{
             		}
             	}
             }
+            
             //System.out.println("previousTime " + previousTime);
             //System.out.println("Max Conc: "  + maxConcentration);
             //System.out.println("Min Conc: " + minConcentration);
@@ -143,6 +145,7 @@ public class FileGradient implements Gradient{
             //	System.out.print(prevConc[i] + "      ");
             //}
             //System.out.println("");
+            
             
             //If initial time was zero, read in the next line to get the next set of concentrations
             if (previousTime >= 0){

@@ -219,7 +219,7 @@ public class Cell implements SimObject{
 
 	}
 	
-	public boolean specialRender(IGL gl, Transform t){
+	public boolean specialRender(IGL gl, Transform t, int m){
 		return false;
 	}
 	
@@ -343,6 +343,22 @@ public class Cell implements SimObject{
 	
 	public boolean isMobile(){
 		return true;
+	}
+	
+	public SurfaceSegment getSurfaceSegment(int index){
+		return null;
+	}
+	
+	public float getSegmentArea(int index){
+		return 0f;
+	}
+	
+	public Vector3f getSegmentWorldNormal(int index){
+		return new Vector3f();
+	}
+	
+	public Vector3f[] getWorldCoordinates(int surface){
+		return null;
 	}
 
 }

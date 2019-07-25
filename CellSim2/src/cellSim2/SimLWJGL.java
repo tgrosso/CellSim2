@@ -103,6 +103,7 @@ public class SimLWJGL {
 				int w = Display.getDisplayMode().getWidth();
 				int h= Display.getDisplayMode().getHeight();
 				ByteBuffer buf = demoApp.getImageBuffer(w, h);
+				//System.out.println("w: " + w + " h: " + h + " Buf size: " + buf.capacity());
 				GL11.glReadPixels(0, 0, width, height, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, buf);
 				demoApp.outputImage();
 			}

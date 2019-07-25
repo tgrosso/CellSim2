@@ -77,6 +77,8 @@ public class SimGenerator {
 	public SimGenerator(File in, File out){
 		inputFile = in;
 		outputDir = out;
+		//System.out.println("outputDir " + outputDir.getAbsolutePath());
+		//System.out.println("inputDir " + inputFile.getAbsolutePath());
 		simValues = new Defaults();
 		try{
 			simValues.readInputFile(in);
@@ -85,6 +87,7 @@ public class SimGenerator {
 			System.err.println("Could not read all inputs!!");
 			System.err.println("Will use some default values");
 		}
+		//System.out.println("SG 90");
 		//Get defaults for all public variables
 		fillVariables();
 		
@@ -100,7 +103,7 @@ public class SimGenerator {
 		catch(SimException e){
 			System.err.println("Could not set molsPerBond - using default"); 
 		}
-		
+		//System.out.println("Proteins created");
 		gradients = new ArrayList<Gradient>();
 		createGradients();
 	}
@@ -165,7 +168,7 @@ public class SimGenerator {
 		HashMap<String, ArrayList<String[]>> grad = simValues.getGradients();
 		for (Entry<String, ArrayList<String[]>> entry : grad.entrySet()){
 			String key = entry.getKey();
-			//System.out.println("SG gradient key : " + key);
+			//System.out.println("SG 170: gradient key : " + key);
 			//Does this protein exist?
 			int proId = -1;
 			for (int i = 0 ;i <  proteins.size(); i++){
@@ -182,7 +185,7 @@ public class SimGenerator {
 				System.err.println("Protein " + key + " not in protein list. Gradient not made.");
 				continue;
 			}
-			//System.out.println("Gradient of " +  key);
+			//System.out.println("SG 188: Gradient of " +  key);
 			//Does this gradient exist already?
 			Gradient g = null;
 			for (int i = 0; i < gradients.size(); i++){
@@ -197,7 +200,7 @@ public class SimGenerator {
 			for (int i = 0; i < paramStrings.size(); i++){
 				String[] line = paramStrings.get(i);
 				String param = line[0];
-				//System.out.println("SG170 param: " + param);
+				//System.out.println("SG202 param: " + param);
 				if (g == null){
 					//gradient doesn't exist yet
 					//only valid parameters are "zero" or "file"
@@ -239,7 +242,7 @@ public class SimGenerator {
 							break;
 						}
 						g.setMaxConcentration(c);
-						//Works for both FileGradient (does nothing) or Zero Gradien
+						//Works for both FileGradient (does nothing) or Zero Gradient
 						break;
 					case "Axis":
 					case "axis":
@@ -286,7 +289,7 @@ public class SimGenerator {
 		position.set(0f, -(float)((channelHeight+wallThick)/2.0), 0f);
 		nextWall = new Wall(sim, channelWidth, wallThick, channelDepth, position); 
 		nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
-		nextWall.setVisible(true);
+		nextWall.setVisible(false);
 		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
 		//System.out.println("Bottom: " + nextWall.toString());
@@ -298,27 +301,29 @@ public class SimGenerator {
 		nextWall.setVisible(true);
 		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
-		//System.out.println("Top: " +nextWall.toString());
 		
+		//System.out.println("Top: " +nextWall.toString());
+	
 		//back
 		position.set(0f, 0f, (float)((channelDepth+wallThick)/2.0));
 		nextWall = new Wall(sim, channelWidth, channelHeight, wallThick, position); 
 		nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
-		nextWall.setVisible(false);
+		nextWall.setVisible(true);
 		nextWall.setOutputFile(sim.getWallFile());
-		walls.add(nextWall);
+		//walls.add(nextWall);
 		//System.out.println("Back: " + nextWall.toString());
-		
+		//System.out.println("SG 315 - Create walls");
+		/*
 		//front
 		position.set(0f, 0f, -(float)((channelDepth+wallThick)/2.0));
 		nextWall = new Wall(sim, channelWidth, channelHeight, wallThick, position); 
 		nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
 		nextWall.setVisible(false);
 		nextWall.setOutputFile(sim.getWallFile());
-		walls.add(nextWall);
+		//walls.add(nextWall);
 		//System.out.println("Front: "+nextWall.toString());
 		
-		/*
+		
 		//left
 		position.set((float)((channelWidth+wallThick)/2.0), 0f, 0f);
 		nextWall = new Wall(sim, wallThick, channelHeight, channelDepth, position); 
@@ -345,6 +350,7 @@ public class SimGenerator {
 		for (Entry<String, ArrayList<String[]>> entry : wallData.entrySet()){
 			String key = entry.getKey();
 			if (key.equals("gradient")){
+				//System.out.println("SG 353");
 				ArrayList<String[]> grads = wallData.get(key);
 				for (int i = 0; i < grads.size(); i++){
 					String[] thisGrad = grads.get(i);
@@ -394,6 +400,7 @@ public class SimGenerator {
 						System.err.println("Not using");
 						continue;
 					}
+					//System.out.println("SG 403: Making gradient wall");
 					//If we are here, we have the gradient and the wall id
 					Wall oldWall = walls.get(thisWall);
 					Vector3f oldSize = oldWall.getSize();
@@ -407,6 +414,7 @@ public class SimGenerator {
 						oldWall.getSurfaceSegment(p).setNewParent(newWall);
 					}
 					walls.set(thisWall, newWall);
+					//System.out.println("SG 417: Gradient wall added " + newWall.toString());
 				}
 			}
 			if (key.equals("coat")){
@@ -540,10 +548,14 @@ public class SimGenerator {
 		}
 		
 		float maxRadius = 1f;
+		float minY = 100;
 		for (int i = 0; i < cells.size(); i++){
 			SegmentedCell c = cells.get(i);
 			if (c.getRadius() > maxRadius){
 				maxRadius = c.getRadius();
+			}
+			if (c.getMinY() < minY){
+				minY = c.getMinY();
 			}
 		}
 		int numCells = cells.size();
@@ -570,7 +582,7 @@ public class SimGenerator {
 			System.err.println("Maximum number of single layer cells is " + gridNum);
 		}
 		//Determine the y value for the origin of each cell
-		float cellCenterY = -vesselSize.y/2 + maxRadius - 1.5f;
+		float cellCenterY = -vesselSize.y/2 - minY;
 		//System.out.println("Num cells: " + numCells);
 		//System.out.println("maxRadius: " + maxRadius);
 		//System.out.println("Center y: " + cellCenterY);
@@ -666,9 +678,11 @@ public class SimGenerator {
 		return grad;
 	}
 	
-	public static void main(String[] args) {
+	public static void main (String[] args){
 		//System.out.println("Sim Generator Is Running\n");
 		SimGenerator sg = new SimGenerator(new File(args[0]), new File(args[1]));
+		//System.out.println(sg);
+
 		boolean showScreen = true;
 		int screenwidth = 800;
 		int screenheight = 800;
