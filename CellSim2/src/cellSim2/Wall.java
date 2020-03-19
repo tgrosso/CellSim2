@@ -49,7 +49,7 @@ public class Wall implements SimObject{
 	protected SimRigidBody body;
 	protected BoxShape wallShape;
 	protected Vector3f origin, size;
-	protected float[] wallColor = {0.9f, 0.9f, 0.9f, 1f}; //bare wall is very light gray
+	protected float[] wallColor = {0.45f, 0.45f, 0.45f, 1f}; //bare wall is very light gray
 	//protected float width, height, depth;
 	protected static FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
 	protected ObjectArrayList<SimObject> collidedObjects;
@@ -185,7 +185,8 @@ public class Wall implements SimObject{
 		for (int i = 0; i < segments.length; i++){
 			if (segments[i].getID() == surface){
 				//Don't add another segment - just add this protein to the segment
-				segments[i].addReceptor(proId, surfaceConc*surfaceArea);
+				//Walls don't start bonds, so the molsPerBond is not used
+				segments[i].addReceptor(proId, surfaceConc*surfaceArea, 1);
 				surfaceHasSegment = true;
 				break;
 			}
@@ -197,7 +198,7 @@ public class Wall implements SimObject{
 			for (int i = 0; i < segments.length; i++){
 				newSegments[i] = segments[i];
 			}
-			seg.addReceptor(proId, surfaceConc*surfaceArea);
+			seg.addReceptor(proId, surfaceConc*surfaceArea, 1);
 			newSegments[segments.length] = seg;
 			segments = newSegments;
 		}
@@ -395,7 +396,7 @@ public class Wall implements SimObject{
 	
 	public void collided(SimObject c, ManifoldPoint pt, long collId){
 		//Walls don't do collisions. The other object will collide with the wall
-		System.out.println("Collided: Wall");
+		//System.out.println("Collided: Wall");
 	}
 	
 	public boolean collidedWith(SimObject s){
@@ -502,7 +503,7 @@ public class Wall implements SimObject{
 		}
 		return s;
 	}
-	
+		
 	public void setOutputFile(BufferedWriter bw){
 		outputFile = bw;
 		//System.out.println("I am wall number: " + id + " and my outputfile is " + outputFile.toString());

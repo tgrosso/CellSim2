@@ -47,7 +47,7 @@ public class Protein {
 	private float[] timesToStable
 	;
 	private float[] color;
-	public static int MOLS_PER_BOND = 100;
+	//public static int MOLS_PER_BOND = 100;
 
 	/**
 	 * A class to represent a protein in simulation
@@ -154,9 +154,9 @@ public class Protein {
 		fis.close();
 	}
 	
-	public static void setMolsPerBond(int m){
+	/*public static void setMolsPerBond(int m){
 		MOLS_PER_BOND = m;
-	}
+	}*/
 
 	public String getName(){
 		return name;
@@ -187,7 +187,36 @@ public class Protein {
 	}
 	
 	public float[] getColor(){
-		return color;
+		//Returns the base color of this protein
+		return color.clone();
+	}
+	
+	public float[] getColor(float portion){
+		//Returns the color of this protein based on the amount of protein there
+		//If portion >= 1, return the base color
+		if (portion >= 1){
+			return color.clone();
+		}
+		//If it is 0 or less(!), return white
+		if (portion <= 0){
+			return (new float[]{1.0f, 1.0f, 1.0f});
+		}
+		//As portion gets lower the color gets closer to white
+		float[] col = new float[3];
+		for (int i = 0; i < 3; i++){
+			//if (i < 1){
+			//	col[i] = 0;
+			//	continue;
+			//}
+			col[i] = (1.0f - portion) + (color[i] * portion);
+			if (col[i] < 0){ //Shouldn't happen
+				col[i] = 0;
+			}
+			if (col[i] >= 1){ //Also shouldn't happen
+				col[i] = 1.0f;
+			}
+		}
+		return col;
 	}
 	
 	public void setColor(float[] c){

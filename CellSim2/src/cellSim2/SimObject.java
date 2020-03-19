@@ -66,5 +66,6 @@ public interface SimObject {
 		public boolean collidedWith(SimObject s);
 		public void clearCollisions();
 		public Gradient getGradient(int protein);
+		//public Interaction getInteraction(int id);
 
 }

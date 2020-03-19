@@ -2,6 +2,11 @@ package cellSim2;
 
 import com.bulletphysics.dynamics.constraintsolver.Generic6DofConstraint;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+
 import javax.vecmath.Vector3f;
 
 import com.bulletphysics.dynamics.RigidBody;
@@ -10,14 +15,21 @@ import com.bulletphysics.dynamics.constraintsolver.TranslationalLimitMotor;
 import com.bulletphysics.dynamics.constraintsolver.RotationalLimitMotor;
 
 public class BondConstraint extends Generic6DofConstraint{
+	//public static BufferedWriter validatingData;
 	private static long id=0;
+	private String startTime;
+	private Vector3f startAPos, startBPos;
+	private float initialLength;
 	private long myId;
 	private Simulation sim;
 	private long creationTime;
 	float timeToStable, bondLength, aValue, cValue;
+	float lastStretch;
+	float adjustment;
 	SurfaceSegment surfA, surfB;
 	int proteinA, proteinB;
-	boolean active;
+	int numMolecules;
+	boolean positionSet, active;
 	Transform ta, tb;
 	TranslationalLimitMotor tlm;
 	RotationalLimitMotor[] rlm;
@@ -26,13 +38,28 @@ public class BondConstraint extends Generic6DofConstraint{
 	public BondConstraint(Simulation s, float stab, float length, SurfaceSegment ssa, SurfaceSegment ssb, int proa, int prob, RigidBody rbA, RigidBody rbB, Transform frameInA, Transform frameInB, boolean useLinearReferenceFrameA) {
 		super(rbA, rbB, frameInA, frameInB, true);
 		this.setLinearLowerLimit(new Vector3f(-length, -length, -length));
+		//this.setLinearLowerLimit(new Vector3f(-length, -length, -length));
 		this.setLinearUpperLimit(new Vector3f(length, length, length));
+		//this.setAngularLowerLimit(angularLower);
+		RotationalLimitMotor rot = this.getRotationalLimitMotor(1);
+		rot.loLimit = (float)((-Math.PI*.9/2));
+		rot.hiLimit = (float)((Math.PI*.9/2));
+		rot = this.getRotationalLimitMotor(2);
+		rot.loLimit = (float)(-Math.PI/2);
+		rot.hiLimit = (float)(Math.PI/2);
+		rot = this.getRotationalLimitMotor(0);
+		rot.loLimit = (float)(-Math.PI);
+		rot.hiLimit = (float)(Math.PI);
 		myId = id;
 		id++;
+		id = id % Long.MAX_VALUE;
 		sim = s;
 		creationTime = sim.getCurrentTimeMicroseconds();
+		startTime = sim.getFormattedTime();
 		timeToStable = stab;
 		bondLength = length;
+		lastStretch = 0;
+		adjustment = 1;
 		
 		//System.out.println("Time to stable: " + timeToStable);
 		cValue = .05f;
@@ -52,21 +79,24 @@ public class BondConstraint extends Generic6DofConstraint{
 		proteinA = proa;
 		proteinB = prob;
 		active = true;
-		ssa.makeBond(proa, Protein.MOLS_PER_BOND);
-		ssb.makeBond(prob, Protein.MOLS_PER_BOND);
+		positionSet = false;
+		numMolecules = Math.max(ssa.getMoleculesPerBond(proa), ssb.getMoleculesPerBond(prob));
+		ssa.makeBond(proa, numMolecules);
+		ssb.makeBond(prob, numMolecules);
 		s.addConstraint(this);
+		//Get world transform for object a and use to convert both positions to get initial points
 		ta = new Transform();
 		tb = new Transform();
+		/*
 		tlm = this.getTranslationalLimitMotor();
-		tlm.damping = .5f;
+		//tlm.damping = .5f;
 		rlm = new RotationalLimitMotor[3];
 		for (int i = 0; i < 3; i++){
-				rlm[i] = this.getRotationalLimitMotor(i);
-				rlm[i].damping = .5f;
-		}
-		//System.out.println("Bond created");
-		//System.out.println("   Surface a: " + ssa.getParent().getType() + "-" + ssa.getParent().getID());
-		//System.out.println("   Surface b: " + ssb.getParent().getType() + "-" + ssb.getParent().getID());
+			rlm[i] = this.getRotationalLimitMotor(i);
+		}*/
+		startAPos = new Vector3f();
+		startBPos = new Vector3f();
+		initialLength = 0;
 	}
 	
 	public void update(){
@@ -80,28 +110,52 @@ public class BondConstraint extends Generic6DofConstraint{
 		}
 		
 		
-		probToBreak = probToBreak * deltaMins;
+		probToBreak = probToBreak * deltaMins;//WHY?
 		getCalculatedTransformA(ta);
 		getCalculatedTransformB(tb);
 		ta.origin.sub(tb.origin);
 		float bondStretch = ta.origin.length() / bondLength;
-		if (bondStretch > 1){
-			probToBreak *= bondStretch;
+		float deltaStretch = Math.abs(bondStretch-lastStretch);
+		float stretchRatio = 0;
+		if (lastStretch != 0f){
+			stretchRatio = deltaStretch/lastStretch;
 		}
+		lastStretch = bondStretch;
+		//if (bondStretch > 10){
+		//	active = false;
+		//}
+		if (bondStretch > 1){
+			adjustment *= 1.001f;
+			//System.err.println("Bond Stretch = " + bondStretch);
+		}
+		else{
+			adjustment = 1f;
+		}
+		
 		//If bond is very long, increase the chance of breaking!
 		//TODO Add a parameter that either increases or decreases. Maybe with a time constraint
 		
 		float rand = sim.getNextRandomF();
 		//System.out.println("Bond " + myId + ": deltaMins: " + deltaMins + " Prob to break: " + probToBreak + " rand: " + rand);
-		if (rand <= probToBreak){
+		if (rand <= probToBreak * adjustment){
 			active = false;
 		}
+		getCalculatedTransformA(ta);
+		getCalculatedTransformB(tb);
+		if (bondStretch > 200){
+			//sim.writeToLog("Bond " + myId + " may be unstable!\t" + bondStretch + "\t" + stretchRatio);
+			//sim.startInvestigating();
+		}
 		
-		/*System.out.println("tlm damping " + tlm.damping);
-		for (int i = 0 ;i < 3; i++){
-			System.out.println("rlm damping " + rlm[i].damping);
-		}*/
-		
+		if (sim.isInvestigating()){
+			String s = sim.getFormattedTime() + "\tBond\t" + myId + "\t" + bondStretch + "\t";
+			s+= ta.origin + "\t" + tb.origin;
+			for (int i = 0; i < 3; i++){
+				s+= "\t" + getAngle(i);
+			}
+			s+= "\n";
+			sim.writeInvestigatingData(s);
+		}
 	}
 	
 	public boolean isActive(){
@@ -113,24 +167,39 @@ public class BondConstraint extends Generic6DofConstraint{
 		long currentTime = sim.getCurrentTimeMicroseconds();
 		float lifetime = (currentTime - creationTime)/1000000/60;
 		
-		int numMolecules =(int)(Math.round(1 - (float)(lifetime/timeToStable) * Protein.MOLS_PER_BOND));
+		int num =(int)(Math.round(1 - (float)(lifetime/timeToStable) * numMolecules));
 		if (lifetime >= timeToStable){
-			numMolecules = 0;
+			num = 0;
 		}
-		surfA.removeBond(proteinA, numMolecules);
-		surfB.removeBond(proteinB, numMolecules);
+		surfA.removeBond(proteinA, num);
+		surfB.removeBond(proteinB, num);
 	}
 	
 	public static String getDataHeaders(){
-		String s = "ID\tObjectA\tProteinA\tObjectB\tProteinB\tLifetime (minutes)\tIs Active\n";
+		String s = "ID\tStartTime\tStartA\tStartB\tStartLen\tObjectA\tA-ID\tProteinA\tObjectB\tB-ID\tProteinB\tLifetime (minutes)\tIs Active\n";
 		return s;
 	}
 	
 	public String getOutput(){
 		float life = (float)(sim.getCurrentTimeMicroseconds() - creationTime)/(1000000*60);
-		String s = myId + "\t" + surfA.getParent().getType() +"-"+surfA.getParent().getID()+ "\t" + sim.getProteinName(proteinA) + "\t" + surfB.getParent().getType() +"-"+surfB.getParent().getID() + "\t" + sim.getProteinName(proteinB) + "\t" + life + "\t" + isActive() + "\n";
-		return s;
+		String s = myId + "\t" + startTime + "\t" + startAPos + "\t" + startBPos + "\t" + initialLength + "\t";
+		s += surfA.getParent().getType() +"-"+surfA.getParent().getID()+ "\t" + surfA.getID() + "\t";
+		s += sim.getProteinName(proteinA) + "\t" + surfB.getParent().getType() +"-"+surfB.getParent().getID() + "\t";
+		s += surfB.getID() + "\t";
+		s += sim.getProteinName(proteinB) + "\t" + life + "\t" + isActive();
+		if (isActive()){
+			getCalculatedTransformA(ta);
+			getCalculatedTransformB(tb);
+			s += ("\t" + ta.origin + "\t" + tb.origin);
+		}
+		return (s + "\n");
 	}
 	
+	public long getID(){
+		return myId;
+	}
+	
+	public static void closeWriter(){
+	}
 
 }

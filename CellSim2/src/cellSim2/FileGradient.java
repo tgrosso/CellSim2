@@ -35,7 +35,7 @@ public class FileGradient implements Gradient{
 	/**
 	 * This file reads concentrations of a ligand from a text file
 	 */
-	protected int proteinId;
+	protected Protein pro;
 	protected int axis;
 	protected float maxConcentration;
 	protected float minConcentration;
@@ -53,27 +53,17 @@ public class FileGradient implements Gradient{
 	long previousTime; //These times should be in microseconds, although they are read in as seconds
 	long nextTime;
 	
-	public FileGradient(int protein, String filename, float[] col) {
+	public FileGradient(Protein p, String filename) {
 		//System.out.println(filename);
-		proteinId = protein;
+		pro = p;
 		gradientSuccessful = false;
 		finalConcentrations = false;
 		outputFile = null;
 		axis = 0;
 		maxConcentration = Float.MIN_VALUE;
 		minConcentration = Float.MAX_VALUE;
-		baseColor = new float[]{0.5f, 0.5f, 0.5f, 1f};
-		if (col.length >= 3){
-			for (int i = 0; i < 3; i++){
-				baseColor[i] = col[i];
-			}
-		}
-		if (col.length >= 4){
-			baseColor[3] = col[3];
-		}
-		else{
-			baseColor[3] = 1.0f;
-		}
+		baseColor = pro.getColor();
+		
 		source = new File(filename);
 		//Try to initialize distances from file and determine minimum and maximum concentrations
 		try {
@@ -199,14 +189,14 @@ public class FileGradient implements Gradient{
         } 
 		catch (FileNotFoundException e) {
             System.err.println("File for Gradient could not be found: " + filename);
-            System.err.println("All concentrations for protein " + proteinId + " set to zero"); //UGH WHERE DO I STORE PROTEIN LIST?
+            System.err.println("All concentrations for protein " + pro.getName() + " set to zero"); //UGH WHERE DO I STORE PROTEIN LIST?
             maxConcentration = 0f;
             minConcentration = 0f;
         }
 		catch (IOException e) {
         	System.err.println("Problem reading file for gradient: " + filename);
         	e.printStackTrace();
-            System.err.println("All concentrations for protein " + proteinId + " set to zero"); //UGH WHERE DO I STORE PROTEIN LIST?
+            System.err.println("All concentrations for protein " + pro.getName() + " set to zero"); //UGH WHERE DO I STORE PROTEIN LIST?
             maxConcentration = 0f;
             minConcentration = 0f;
         }
@@ -229,10 +219,6 @@ public class FileGradient implements Gradient{
                 }
             }
         }
-	}
-	
-	public FileGradient(int protein, String filename){
-		this(protein, filename, new float[]{0.5f, 0.5f, 0.5f, 1.0f});
 	}
 	
 	@Override
@@ -274,14 +260,14 @@ public class FileGradient implements Gradient{
 				}
 				catch (FileNotFoundException e) {
 		            System.err.println("File for Gradient could not be found: " + source.getName());
-		            System.err.println("All concentrations for protein " + proteinId + " set to zero"); //UGH WHERE DO I STORE PROTEIN LIST?
+		            System.err.println("All concentrations for protein " + pro.getName() + " set to zero"); //UGH WHERE DO I STORE PROTEIN LIST?
 		            maxConcentration = 0f;
 		            minConcentration = 0f;
 		        }
 				catch (IOException e) {
 		        	System.err.println("Problem reading file for gradient: " + source.getName());
 		        	e.printStackTrace();
-		            System.err.println("All concentrations for protein " + proteinId + " set to zero"); //UGH WHERE DO I STORE PROTEIN LIST?
+		            System.err.println("All concentrations for protein " + pro.getName() + " set to zero"); //UGH WHERE DO I STORE PROTEIN LIST?
 		            maxConcentration = 0f;
 		            minConcentration = 0f;
 		        }
@@ -350,33 +336,19 @@ public class FileGradient implements Gradient{
 	}
 	
 	public int getProtein(){
-		return proteinId;
+		return pro.getId();
 	}
 	
 	@Override
 	public float[] getColor(float con){
 		//Find the color that represents this concentration
 		//white is minConcentration, baseColor is maximum
-		float[] newColor = new float[]{1.0f, 1.0f, 1.0f, 1.0f};
-		if (!gradientSuccessful){
-			return newColor;
-		}
-		if (con >= maxConcentration){
-			return baseColor;
-		}
-		if (con <= minConcentration){
-			return newColor;
-		}
 		float ratio = (con-minConcentration)/(maxConcentration - minConcentration);
-		//System.out.print("Concentration: " + con + " color: ");
-		for (int i = 0; i < 3; i++){
-			float diff = 1.0f - baseColor[i];
-			float newCol = 1.0f - (ratio * diff);
-			newColor[i] = newCol;
-			//System.out.print(newColor[i] + "  ");
+		
+		if (!gradientSuccessful){
+			return pro.getColor();
 		}
-		//System.out.println("");
-		return newColor;
+		return pro.getColor(ratio);
 	}
 	
 	@Override
@@ -430,7 +402,7 @@ public class FileGradient implements Gradient{
 	}
 	
 	public void writeOutput(Simulation sim){
-		String s = sim.getFormattedTime() + "\t" + sim.getProteinName(proteinId);
+		String s = sim.getFormattedTime() + "\t" + pro.getName();
 		for (int i = 0; i < distances.length; i++){
 			float[] position = new float[]{0, 0, 0};
 			position[axis] = distances[i];
@@ -441,7 +413,7 @@ public class FileGradient implements Gradient{
 			outputFile.write(s);
 		}
 		catch(IOException e){
-			sim.writeToLog(sim.getFormattedTime() + "\tFailed to write to gradient-" + sim.getProteinName(proteinId));
+			sim.writeToLog(sim.getFormattedTime() + "\tFailed to write to gradient-" + pro.getName());
 		}
 	}
 	

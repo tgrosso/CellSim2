@@ -12,7 +12,6 @@ public class TraffickingInfo {
 	}
 	
 	public TraffickingInfo(float s, float u, float b){
-		//secretion rate should be for this unit (cell or segment)
 		//time units should be per microseconds
 		secretionRate = s;
 		unboundInternalizationRate = u;
@@ -31,6 +30,18 @@ public class TraffickingInfo {
 		return boundInternalizationRate;
 	}
 	
+	public void setSecretionRate(float r){
+		secretionRate = r;
+	}
+	
+	public void setUnboundIntRate(float r){
+		unboundInternalizationRate = r;
+	}
+	
+	public void getBoundIntRate(float r){
+		boundInternalizationRate = r;
+	}
+	
 	public float getRate(int i){
 		switch(i){
 			case 0:
@@ -40,8 +51,10 @@ public class TraffickingInfo {
 			case 2:
 				return boundInternalizationRate;
 		}
-		return secretionRate;
+		return -1.0f;
 	}
+	
+	
 	
 	public boolean withinRange(TraffickingInfo ti){
 		//returns true if all values are within .1% of ti values
@@ -53,5 +66,11 @@ public class TraffickingInfo {
 	
 	public boolean isBlank(){
 		return (secretionRate == 0 && unboundInternalizationRate == 0 && boundInternalizationRate == 0);
+	}
+	
+	public String toString(){
+		String s = "Traf. Info: secRate: " + secretionRate + " unboundInt: " + unboundInternalizationRate;
+		s += " boundInt: " + boundInternalizationRate;
+		return s;
 	}
 }

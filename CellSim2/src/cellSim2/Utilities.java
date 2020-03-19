@@ -2,6 +2,7 @@ package cellSim2;
 
 import javax.vecmath.Vector3f;
 
+import com.bulletphysics.BulletGlobals;
 import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.linearmath.Transform;
 
@@ -10,7 +11,7 @@ public class Utilities {
 	private Utilities() {
 	}
 	
-	public static void makeBonds(Simulation s, int rec, int lig, SurfaceSegment recSurface, SurfaceSegment ligSurface){
+	public static int makeBonds(Simulation s, int rec, int lig, SurfaceSegment recSurface, SurfaceSegment ligSurface){
 		Protein receptor = s.getProtein(rec);
 		int ligandIndex = receptor.proteinIndex(lig);
 		float bondLength = receptor.getBondLength(ligandIndex);
@@ -25,12 +26,14 @@ public class Utilities {
 		//are parallel to ligSurface, we can't make bonds here.
 		Vector3f recNormal = recSurface.getParent().getSegmentWorldNormal(recSurfaceId);
 		Vector3f ligNormal = ligSurface.getParent().getSegmentWorldNormal(ligSurfaceId);
-		//System.out.println("ligSurfaceId " + ligSurfaceId + " ligNormal: " + ligNormal);
+		//s.writeInvestigatingData("ligSurfaceId " + ligSurfaceId + " ligNormal: " + ligNormal + "\n");
+		//s.writeInvestigatingData("recSurfaceId " + recSurfaceId + " recNormal: " + recNormal + "\n");
 		float normalsDot = recNormal.dot(ligNormal);
 		//System.out.println("Length of normals: " + recNormal.length() + ", " + ligNormal.length() + " dot Product " + normalsDot);
 		
 		if (normalsDot == 0f){
-			return;
+			//s.writeInvestigatingData("Dot product is zero. Parallel. No bonds\n");
+			return 0;
 		}
 		
 		//The area in which we look for bonds is the receptor surface area. If the other surface is smaller, we just get 
@@ -38,14 +41,14 @@ public class Utilities {
 		float bindingArea = Math.abs(recSurface.getParent().getSegmentArea(recSurfaceId));
 		if (bindingArea == 0){
 			System.err.println("Utilities-makeBonds: A surface with no area?");
-			return;
+			return 0;
 		}
 		
 		//Find the portion of the ligand surface that we are looking at. The whole surface or less
 		float ligandArea = Math.abs(ligSurface.getParent().getSegmentArea(ligSurfaceId));
 		float ligandPortion = Math.min(bindingArea/ligandArea, 1.0f);
-		//The volume of the space with the binding is taking place is the area * the length of the bond
-		float bindingVolume = bindingArea * bondLength;
+		//The volume of the space with the binding is taking place is the area * the minimum collision distance
+		float bindingVolume = (float)(bindingArea * BulletGlobals.CONVEX_DISTANCE_MARGIN);
 		
 		//Get number of unbound receptors
 		float numUnboundReceptors = recSurface.getNumMolecules(rec, 1, false);
@@ -55,16 +58,17 @@ public class Utilities {
 		//convert ligandConc to nM : 10^15 (cubic micron/L) * 10^9 nMoles/mole / 6.02 * 10^23 molecules/mole
 		//= 1.6611.2957
 		ligandConc *= 1.66112975;
-		
+		//Get number of molecules per bond
+		int molsPerBond = recSurface.getMoleculesPerBond(rec);
 		//Try to make bonds using the differential equations
 		float time = s.getDeltaTimeMicroseconds();
-		/*System.out.println("binding area: " + bindingArea + " totalLigands: " + totalLigands);
-		System.out.println("dt: " + time + " ligandArea: " + ligandArea + " ligandPortion: " + ligandPortion);
-		System.out.println("binding Volume: " + bindingVolume + " unbound Receptors: " + numUnboundReceptors + " bindingRate: " + bindingRate);
-		System.out.println("numLigands: " + numLigands + " ligandConc: " + ligandConc + " MOLS_PER_BOND: " + Protein.MOLS_PER_BOND);
-		*/
-		float maxBonds = (time * bindingRate * numUnboundReceptors * ligandConc/Protein.MOLS_PER_BOND);
-		//System.out.println("Maximum Bonds: " + maxBonds);
+		//s.writeInvestigatingData("  binding area: " + bindingArea + " totalLigands: " + totalLigands + "\n");
+		//s.writeInvestigatingData("  dt: " + time + " ligandArea: " + ligandArea + " ligandPortion: " + ligandPortion + "\n");
+		//s.writeInvestigatingData("  binding Volume: " + bindingVolume + " unbound Receptors: " + numUnboundReceptors + " bindingRate: " + bindingRate + "\n");
+		//s.writeInvestigatingData("  numLigands: " + numLigands + " ligandConc: " + ligandConc + " MOLS_PER_BOND: " + Protein.MOLS_PER_BOND + "\n");
+		
+		float maxBonds = (time * bindingRate * numUnboundReceptors * ligandConc/molsPerBond);
+		//s.writeInvestigatingData(recSurfaceId + ":  Maximum Bonds: " + maxBonds + "\n");
 		
 		//TODO If the number is under some kind of minimum, use the Gillespie algorithm
 		
@@ -76,7 +80,7 @@ public class Utilities {
 		ligSurface.getParent().getRigidBody().getCenterOfMassPosition(ligOrigin);
 		
 		
-		
+		int countBonds = 0;
 		for (int i = 0; i < (int)(maxBonds); i++){
 			//Find a random point on the receptor surface
 			//adamswaab.wordpress.com/2009/12/11/random-point-in-a-triangle-barycentric-coordinates/
@@ -113,18 +117,18 @@ public class Utilities {
 			Vector3f intersection = new Vector3f(recNormal);
 			intersection.scale(s1);
 			intersection.add(randVec);
-			//System.out.println("ligNorm: " + ligNormal + " ligWorldVertices[0] " + ligWorldVertices[0]);
-			//System.out.println("randVec: " + randVec + " recOrigin: " + recOrigin);
+			//s.writeInvestigatingData("ligNorm: " + ligNormal + " ligWorldVertices[0] " + ligWorldVertices[0] + "\n");
+			//s.writeInvestigatingData("   randVec: " + randVec + " recOrigin: " + recOrigin + "\n");
 			
-			//System.out.println("s1 : " + s1 + ", " + intersection);
+			//s.writeInvestigatingData("   s1 : " + s1 + ", " + intersection + "\n");
 			//Find the intersection of this point with the plane of the other surface
 			//See if the intersection point is within the bound of the other surface.
 			if (s1 <= bondLength){
 				//System.out.println("Make a bond");
 				Vector3f localRec = new Vector3f(randVec);
 				localRec.sub(recOrigin);
-				//System.out.println(" local point on triangle: " + localRec);
-				//System.out.println("intersection: " + intersection + " ligOrigin: " + ligOrigin);
+				//s.writeInvestigatingData("    local point on triangle: " + localRec + "\n");
+				//s.writeInvestigatingData("    intersection: " + intersection + " ligOrigin: " + ligOrigin + "\n");
 				Vector3f localLig = new Vector3f(intersection);
 				localLig.sub(ligOrigin);
 				Transform localA = new Transform(), localB = new Transform();
@@ -132,13 +136,15 @@ public class Utilities {
 				localB.setIdentity();
 				localA.origin.set(localRec);
 				localB.origin.set(localLig);
-				//System.out.println(" local point on wall: " + localLig);
+				//s.writeInvestigatingData("   local point on wall: " + localLig + " \n");
 				//BondConstraint(Simulation s, float stab, SurfaceSegment ssa, SurfaceSegment ssb, int proa, int prob, RigidBody rbA, RigidBody rbB, Transform frameInA, Transform frameInB, boolean useLinearReferenceFrameA) {
 				BondConstraint bc = new BondConstraint(s, timeToStable, bondLength, recSurface, ligSurface, rec, lig, recSurface.getParent().getRigidBody(), ligSurface.getParent().getRigidBody(), localA, localB, true);
+				countBonds++;
 			}
 		}
+		//s.writeInvestigatingData(recSurfaceId + "\t" + countBonds + "\n");
+		return countBonds;
 	}
-
 }
 
 

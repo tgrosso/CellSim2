@@ -35,8 +35,13 @@ public class SurfaceSegment {
 	private float[] unboundReceptors;
 	private float[] boundReceptors;
 	private float[] maxReceptors;
-	private HashMap<Integer, TraffickingInfo> traffickingRates;
+	private int[] molsPerBond;
+	//private HashMap<Integer, TraffickingInfo> traffickingRates;
 	private int visibleReceptor = -1;
+	private float lastConcentration;
+	private Vector3f worldCenter;
+	private int mins;
+	private long overall;
 	
 	public SurfaceSegment(SimObject p, int id) {
 		parent = p;
@@ -45,10 +50,15 @@ public class SurfaceSegment {
 		unboundReceptors = new float[0];
 		boundReceptors = new float[0];
 		maxReceptors = new float[0];
-		traffickingRates = new HashMap<Integer, TraffickingInfo>();
+		molsPerBond = new int[0];
+		//traffickingRates = new HashMap<Integer, TraffickingInfo>();
+		lastConcentration = 0;
+		worldCenter = new Vector3f();
+		mins = 0;
+		overall = 0;
 	}
 	
-	public void addReceptor(int proId, float unbound){
+	public void addReceptor(int proId, float unbound, int mpb){
 		//System.out.println("SS 52: adding receptor");
 		int index = getProteinIndex(proId);
 		if (index >= 0){
@@ -61,14 +71,17 @@ public class SurfaceSegment {
 		float[] newUnbound = Arrays.copyOf(unboundReceptors, receptorIds.length+1);
 		float[] newBound = Arrays.copyOf(boundReceptors, receptorIds.length+1);
 		float[] newMax = Arrays.copyOf(maxReceptors, receptorIds.length+1);
+		int[] newMPB = Arrays.copyOf(molsPerBond, receptorIds.length+1);
 		newids[receptorIds.length] = proId;
 		newUnbound[receptorIds.length] = unbound;
 		newBound[receptorIds.length] = 0;
 		newMax[receptorIds.length] = unbound;
+		newMPB[receptorIds.length] = mpb;
 		receptorIds = newids;
 		unboundReceptors = newUnbound;
 		boundReceptors = newBound;
 		maxReceptors = newMax;
+		molsPerBond = newMPB;
 		if (receptorIds.length == 1){
 			visibleReceptor = 0;
 		}
@@ -79,11 +92,6 @@ public class SurfaceSegment {
 		//System.out.println("unbound receptor: " + unboundReceptors[visibleReceptor]);
 		//System.out.println("bound receptor: " + boundReceptors[visibleReceptor]);
 		//System.out.println("receptor id: " + receptorIds[visibleReceptor]);
-	}
-	
-	public void addTraffickingInfo(int recId, TraffickingInfo ti){
-		//Will simply replace the one that is in the map if one exists
-		traffickingRates.put(recId, ti);
 	}
 	
 	public boolean setVisibleProtein(int id){
@@ -109,11 +117,11 @@ public class SurfaceSegment {
 		return parent;
 	}
 	
-	public void removeTraffickingInfo(int recId){
-		if (traffickingRates.containsKey(recId)){
-			traffickingRates.remove(recId);
-		}
-	}
+	//public void removeTraffickingInfo(int recId){
+	//	if (traffickingRates.containsKey(recId)){
+	//		traffickingRates.remove(recId);
+	//	}
+	//}
 	
 	public float getNumMolecules(int proID, float portion, boolean bound){
 		for (int i = 0; i < receptorIds.length; i++){
@@ -130,7 +138,7 @@ public class SurfaceSegment {
 		return -1;
 	}
 	
-	public float getProteinPercentage(int proID, boolean bound){
+	public float getProteinPortion(int proID, boolean bound){
 		for (int i = 0; i < receptorIds.length; i++){
 			if (proID == receptorIds[i]){
 				if (bound){
@@ -139,6 +147,16 @@ public class SurfaceSegment {
 				else{
 					return unboundReceptors[i] / maxReceptors[i];
 				}
+			}
+		}
+		//protein not found!
+		return -1;
+	}
+	
+	public int getMoleculesPerBond(int proID){
+		for (int i = 0; i < receptorIds.length; i++){
+			if (proID == receptorIds[i]){
+				return molsPerBond[i];
 			}
 		}
 		//protein not found!
@@ -154,23 +172,19 @@ public class SurfaceSegment {
 		return -1;
 	}
 	
-	public void update(long now, float deltaMicroSecs, Vector3f worldCenter){
+	public void update(long now, float deltaMicroSecs, Vector3f wC){
 		//Update all of the proteins on this segment
 		//System.out.println("SS 152: Updating proteins");
 		TraffickingInfo tf = new TraffickingInfo();
+		worldCenter = wC;
 		
 		for (int i = 0; i < receptorIds.length; i++){
 			Integer key = new Integer(receptorIds[i]);
 			Protein pro = parent.getProtein(receptorIds[i]);
 			//System.out.println("SS 162 protein: " + pro.getName());
-			if (traffickingRates.containsKey(key)){
-				tf = traffickingRates.get(key);
-			}
-			else{
-				tf = parent.getTraffickInfo(receptorIds[i], myId);
-				//System.out.println("SS 163 Getting parent tf");
-			}
-			//System.out.println("SS 165 receptorId " + i + " tf: " + tf.toString());
+			tf = parent.getTraffickInfo(receptorIds[i], myId);
+			//System.out.println("SS 163 Getting parent tf");
+			//System.out.println("SS 178 receptorId " + i + " tf: " + tf.toString());
 			if (tf.isBlank()){
 				//Reduce using half life
 				//System.out.println("SS 172: tf is Blank");
@@ -185,6 +199,9 @@ public class SurfaceSegment {
 				System.out.println("unbound int: " + tf.getUnboundIntRate());
 				System.out.println("bound int: " + tf.getBoundIntRate());
 			}*/
+			//Are there a relevant interactions for this surface protein?
+			//Get all interactions with this protein as the target
+			
 			//Use the trafficking info to update the number of proteins
 			//See if there is a gradient of any ligands
 			int[] ligands = pro.getLigands();
@@ -193,19 +210,27 @@ public class SurfaceSegment {
 				Gradient g = parent.getGradient(ligands[k]);
 				float ligandConc = 0;
 				if (g!= null){
-					ligandConc = g.getConcentration(now, worldCenter);				
+					//TODO Only works if a single ligand!
+					ligandConc = g.getConcentration(now, worldCenter);	
+					lastConcentration = ligandConc;
 				} 
 				float kon = pro.getBindingRate(k);
 				float koff = pro.getReverseRate(k);
-				/*
-				if (myId == 0){
-					System.out.println("SS 201: ");
-					System.out.println("   onrate: " + kon);
-					System.out.println("    offrate: " + koff);
-				}*/
 				float qr = tf.getSecretionRate();
 				float kt = tf.getUnboundIntRate();
 				float ke = tf.getBoundIntRate();
+				/*
+				if (myId == 0){
+					System.out.println("SS 212: ");
+					System.out.println("   onrate: " + kon);
+					System.out.println("    offrate: " + koff);
+					System.out.println("delta Micro: " + deltaMicroSecs);
+					System.out.println("qr: " + qr);
+					System.out.println("kt: " + kt);
+					System.out.println("ke: " + ke);
+				}*/
+				
+				
 				float deltaR = deltaMicroSecs * ((-kon*unboundReceptors[i]*ligandConc)+(koff * boundReceptors[i])-(kt*unboundReceptors[i])+qr);
 				float deltaC = deltaMicroSecs * ((kon*unboundReceptors[i]*ligandConc) - (koff * boundReceptors[i]) - (ke * boundReceptors[i]));
 				unboundReceptors[i] += deltaR;
@@ -217,8 +242,14 @@ public class SurfaceSegment {
 				if (boundReceptors[i] < 0){
 					boundReceptors[i] = 0;
 				}
+				overall += deltaMicroSecs;
+				int newMinutes = (int)(overall/6e7);
+				if (newMinutes > mins && parent.getID()==0){
+					mins = newMinutes;
+					//System.out.println("SS 241 - " + mins + ": R" + unboundReceptors[i] + " C " + boundReceptors[i]);
+				}
 			}
-				
+
 		}
 	}
 	
@@ -254,10 +285,11 @@ public class SurfaceSegment {
 	public String getOutput(Simulation sim){
 		String s = "";
 		for (int i = 0; i < receptorIds.length; i++){
-			//System.out.println("SS 257 Bound receptors: " + boundReceptors[i]);
+			//System.out.println("SS 280 Bound receptors: " + boundReceptors[i]);
 			if (boundReceptors[i] > 0 || unboundReceptors[i] > 0){
 				s += sim.getFormattedTime() + "\t" + getParent().getType() + "-" + getParent().getID() + "\t" + myId + "\t";
 				s += sim.getProteinName(receptorIds[i]) + "\t" + unboundReceptors[i] + "\t" + boundReceptors[i];
+				s += "\t" + lastConcentration + "\t" + worldCenter.x;
 				s += "\n";
 			}
 		}

@@ -38,6 +38,7 @@ public class GradientWall extends Wall {
 	protected Vector3f[] segColors;
 	protected long lastUpdate = 0;
 	protected long secBetweenUpdates = 10 * 1000000;
+
 	
 	
 	public GradientWall(Simulation s, float w, float h, float d, Vector3f o, Gradient g) {
@@ -47,14 +48,19 @@ public class GradientWall extends Wall {
 		if (w < drawnSegments){
 			drawnSegments = (int)w;
 		}
+		distanceFromSource = sim.getDistanceFromSource();
 		//System.out.println("GW 50: Making gradient wall");
 		//TODO Make this work for other axes. For now it's just x!
 		segColors = new Vector3f[drawnSegments];
+		//get the width of each segment
 		float segWidth = w / drawnSegments;
+		//Make the size of each segment and make the segment
 		Vector3f halfex = new Vector3f(segWidth/2, h/2, d/2);
 		BoxShape sectionShape = new BoxShape(halfex);
 		gradWallShape = new CompoundShape();
+		
 		for (int i = 0; i < drawnSegments; i++){
+			//Add each segment to the Compound Shape)
 			Vector3f p = new Vector3f(o.x-w/2+i*segWidth+segWidth/2, o.y, o.z);
 			//System.out.println(i + ": " + p);
 			Transform t = new Transform();
@@ -63,7 +69,8 @@ public class GradientWall extends Wall {
 			gradWallShape.addChildShape(t, sectionShape);
 			segColors[i] = new Vector3f();
 		}
-		//updateColors();
+
+		updateColors();
 	}
 
 	public GradientWall(Simulation s, float w, float h, float d, Vector3f o) {
@@ -88,7 +95,7 @@ public class GradientWall extends Wall {
 		float startDist = this.origin.x - this.size.x/2;
 		Transform t = new Transform();
 		Vector3f pos = new Vector3f();
-		if (lastUpdate < 1 ||now - lastUpdate > secBetweenUpdates){
+		if (lastUpdate < 1 || now - lastUpdate > secBetweenUpdates){
 			//System.out.println("startDist: " + startDist + " dist from source: " + distanceFromSource);
 			//update the Colors for each wall segment
 			for (int i = 0; i < drawnSegments; i++){
@@ -109,7 +116,7 @@ public class GradientWall extends Wall {
 		if (grad == null){
 			return false;
 		}
-		//System.out.println("GW 112: Special render");
+		//System.out.println("GW 118: Special render");
 		updateColors();
 		Transform tran = new Transform(t);
 		//render each of the underlying boxes
@@ -117,7 +124,14 @@ public class GradientWall extends Wall {
 			CollisionShape cs = gradWallShape.getChildShape(i);
 			gradWallShape.getChildTransform(i, tran);
 			GLShapeDrawer.drawOpenGL(gl, tran, cs, segColors[i], mode);
+			//if (i == 0){
+			//	System.out.println("Segment 0 color: " + segColors[i]);
+			//}
+			//if (i == drawnSegments -1){
+			//	System.out.println("Segment " + (drawnSegments-1) + " color: " + segColors[i]);
+			//}
 		}
+		
 		return true;
 		//return false;
 	}

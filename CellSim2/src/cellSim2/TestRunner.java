@@ -274,7 +274,7 @@ public class TestRunner {
 						//System.out.println("Reading in cell parameters: ");
 						//System.out.println("param: " + param);
 						for (int k = 0; k < values.length; k++){
-							System.out.println("\t" + values[k]);
+							//System.out.println("\t" + values[k]);
 						}
 						paramMap.put(param,  values);
 						continue;
@@ -339,8 +339,8 @@ public class TestRunner {
 					System.out.println("Threads completed");
 				}
 				else{
-					System.out.println("Timeout happened first!");
-					System.out.println("Shutting down thread");
+					System.err.println("Timeout happened first!");
+					System.err.println("Shutting down thread");
 					executor.shutdownNow();
 					if (!executor.awaitTermination(10, TimeUnit.MINUTES)){
 						System.err.println("Terimination not complete! You may want to manually shut down.");

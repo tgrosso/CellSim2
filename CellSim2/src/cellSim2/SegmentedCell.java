@@ -19,7 +19,9 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileWriter;
 import java.util.HashSet;
+import java.util.HashMap;
 
 import javax.vecmath.Vector3f;
 import javax.vecmath.Matrix3f;
@@ -27,7 +29,6 @@ import javax.vecmath.Matrix3f;
 import com.bulletphysics.collision.dispatch.CollisionFlags;
 import com.bulletphysics.collision.narrowphase.ManifoldPoint;
 import com.bulletphysics.collision.shapes.CollisionShape;
-//import com.bulletphysics.collision.shapes.SphereShape;
 import com.bulletphysics.collision.shapes.TriangleCallback;
 import com.bulletphysics.demos.opengl.IGL;
 import com.bulletphysics.dynamics.RigidBody;
@@ -54,7 +55,8 @@ import org.lwjgl.opengl.GL11;
 public class SegmentedCell implements SimObject{
 	
 	private static int cell_ids = 0;
-	private static float concConvertion = (float)(1 / .60221409);
+	private static HashMap<String, HashMap<Integer, Interaction[]>> interactions = new HashMap<String, HashMap<Integer, Interaction[]>>();
+	
 	//converts concentration to nanoMolar - 
 	//molecules/cubic microns * 1 mole / Avogardro's molecules * cubic micron/10 -15 L * 1 nanomole/10-9 moles
 	private int myId;
@@ -77,6 +79,7 @@ public class SegmentedCell implements SimObject{
 	private float density = 1.01f;
 	private float volume, mass;
 	private float maxDeltaVel=1; //units radians per second
+	private float maxLinVel, maxAngVel;
 	private int numSegments;
 	private int detailLevel;
 	private static GImpactMeshSphere cellShape;
@@ -95,6 +98,7 @@ public class SegmentedCell implements SimObject{
 	protected HashSet<Integer> receptorsBindTo;
 	private boolean hasReceptors;
 	private boolean[] segCollided;
+	
 	
 	private static float[] glMat = new float[16];
 	private static Vector3f aabbMax = new Vector3f(1e30f, 1e30f, 1e30f);
@@ -171,7 +175,7 @@ public class SegmentedCell implements SimObject{
 		surfaceArea = 0;
 		for (int i = 0; i < numSegments; i++){
 			surfaceArea += triangleAreas[i];
-			//System.out.println("triangle " + i + " surface area " + triangleAreas[i]);
+			//s.writeInvestigatingData("triangle " + i + " surface area " + triangleAreas[i] + "\n");
 		}
 		//System.out.println("Seg Cell 172: Segment 0 fraction = " + triangleAreas[0]/surfaceArea);
 		
@@ -222,6 +226,10 @@ public class SegmentedCell implements SimObject{
 			segCollided[i] = false;
 		}
 		
+		maxLinVel = (float)(.9* radius * 2 / (s.getDeltaTimeMicroseconds() /1000000)); 
+		//This means it would be moving more than its diameter in a time frame
+		maxAngVel = (float)(.9* (Math.PI / 2) / (s.getDeltaTimeMicroseconds()/1000000));
+		
 	}
 	
 	public SegmentedCell(Simulation s, float r, int dl) {
@@ -262,6 +270,80 @@ public class SegmentedCell implements SimObject{
 		//System.out.println("my origin: " +initialPosition.toString() + " Dist to source: " + sim.getDistanceFromSource(initialPosition.x));
 	}
 	
+	public static HashMap<String, String[]> readCellData(String type, String filename){
+		HashMap<String, String[]> cdata = new HashMap<String, String[]>();
+		cdata.put("Name", new String[]{"Unnamed Cell Type"});
+		cdata.put("numCells", new String[]{"5"});
+		cdata.put("cellDetailLevel", new String[]{"1"});
+		cdata.put("radius", new String[]{"10"});
+		cdata.put("density", new String[]{"1.01"});
+		cdata.put("maxDeltaVel", new String[]{"1"});
+		File inFile = new File(filename);
+		try{
+			FileInputStream fis = new FileInputStream(inFile);
+			InputStreamReader isr = new InputStreamReader(fis);
+			BufferedReader br = new BufferedReader(isr);
+			String line;
+		
+			while ((line = br.readLine()) != null) {
+				if (line.length() > 0 && !line.contains("\\\\")){
+					String[] valueVar = line.split("\t");
+					if (valueVar.length < 2){
+						continue;
+					}
+					String var = valueVar[0];
+					String[] value = Arrays.copyOfRange(valueVar, 1, valueVar.length);
+					if (var.equals("receptor")){
+						if (cdata.containsKey("receptor")){
+							String[] oldVals = cdata.get(var);
+							String[] newVals = new String[oldVals.length+1];
+							for (int i = 0; i < oldVals.length; i++){
+								newVals[i] = oldVals[i];
+							}
+							newVals[oldVals.length] = value[0];
+							//add value[0] (name of protein) to list
+							oldVals = newVals;
+						}
+						else{
+							cdata.put("receptor", new String[]{value[0]});
+						}
+					}
+					else if (var.equals("interaction")){
+						if (cdata.containsKey("interaction")){
+							String[] oldVals = cdata.get(var);
+							String[] newVals = new String[oldVals.length+1];
+							for (int i = 0; i < oldVals.length; i++){
+								newVals[i] = oldVals[i];
+							}
+							newVals[oldVals.length] = value[0];
+							oldVals = newVals;
+							//add value[0] (name of protein) to list
+						}
+						else{
+							cdata.put("interaction", new String[]{value[0]});
+						}
+					}
+					else if (cdata.containsKey(var)){
+						cdata.put(var, value);
+					}
+					else{//Not a known value
+						System.err.println(var + " is not a valid cell value.");
+					}
+				}
+			}
+			br.close();
+			isr.close();
+			fis.close();
+		}
+		catch(IOException e){
+						System.err.println("Error reading in cell input file: " + filename);
+						System.err.println("Error: " + e.toString());
+						System.err.println("Cell Data Not Added");
+						return new HashMap<String, String[]>();
+		}
+		return cdata;
+	}
+	
 	public static ArrayList<SegmentedCell> readInFile(String type, String filename, Simulation sim){
 		File inFile = new File(filename);
 		int numCells = 1;
@@ -273,6 +355,7 @@ public class SegmentedCell implements SimObject{
 		
 		float maxDeltaVel = 1;
 		ArrayList<String[]> receptorInfo = new ArrayList<String[]>();
+		ArrayList<String[]> interactionInfo = new ArrayList<String[]>();
 		try{
 			FileInputStream fis = new FileInputStream(inFile);
 			InputStreamReader isr = new InputStreamReader(fis);
@@ -295,12 +378,21 @@ public class SegmentedCell implements SimObject{
 						continue;
 					}
 					if (var.equals("receptor")){
-						if (valueVar.length < 5){
-							System.err.println("Badly formatted input. receptor<tab>protein name<tab>secretion rate<tab><unbound internalization rate<tab>bound internalization rate.");
+						if (valueVar.length < 6){
+							System.err.println("Badly formatted input. receptor<tab>protein name<tab>secretion rate<tab><unbound internalization rate<tab>bound internalization rate<tab>molecules per bond.");
 							System.err.println("Input was: " + line);
 							continue;
 						}
 						receptorInfo.add(Arrays.copyOfRange(valueVar, 1, valueVar.length));
+						continue;
+					}
+					if (var.equals("interaction")){
+						if (valueVar.length < 7){
+							System.err.println("Badly formatted input. interaction<tab>receptor protein<tab>target protein<tab>affected rate<tab>activation percent<tab>saturation percent<tab>maximum response");
+							System.err.println("Input was: " + line);
+							continue;
+						}
+						interactionInfo.add(Arrays.copyOfRange(valueVar, 1, valueVar.length));
 						continue;
 					}
 					if (!Defaults.variableExists("Cell", var)){
@@ -363,11 +455,13 @@ public class SegmentedCell implements SimObject{
 			float secrete = 0;
 			float internUnbound = 0;
 			float internBound = 0;
+			int bpm = 1;
 			try{
 				//The rates in the text file are per minute - convert to per microseconds
 				secrete = Float.parseFloat(rec[1])/6e7f;
 				internUnbound = Float.parseFloat(rec[2])/6e7f ;
 				internBound = Float.parseFloat(rec[3])/6e7f;
+				bpm = Integer.parseInt(rec[4]);
 			}
 			catch(NumberFormatException e){
 				System.err.println("Error parsing receptor " + rec[0]);
@@ -376,21 +470,72 @@ public class SegmentedCell implements SimObject{
 			}
 			TraffickingInfo ti = new TraffickingInfo(secrete, internUnbound, internBound);
 			for (int j = 0; j < numCells; j++){
-				cells.get(j).addReceptor(proId, ti);
+				cells.get(j).addReceptor(proId, ti, bpm);
 			}
+		}
+		//add interactions
+		for (int i = 0; i < interactionInfo.size(); i++){
+			String[] inter = interactionInfo.get(i);
+			String recName = inter[0];
+			int recId = sim.getProteinId(recName);
+			if (recId<0){
+				System.err.println("Error adding interaction: " + recName + " does not exist");
+				continue;
+			}
+			String tarName = inter[1];
+			int tarId = sim.getProteinId(tarName);
+			if (tarId<0){
+				System.err.println("Error adding interaction: " + tarName + " does not exist");
+				continue;
+			}
+			int rate = -1;
+			try{
+				rate = Integer.parseInt(inter[2]);
+			}
+			catch(NumberFormatException e){
+				rate = Interaction.getRateId(inter[2]);
+				if (rate < 0){
+					System.err.println("Error parsing interaction " + inter[0]);
+					System.err.println("Interaction not added");
+					continue;
+				}
+			}
+			float affectPer = 0;
+			float satPer = 0;
+			float maxResp = 1;
+			try{
+				affectPer = Float.parseFloat(inter[3]);
+				satPer = Float.parseFloat(inter[4]);
+				maxResp = Integer.parseInt(inter[5]);
+			}
+			catch(NumberFormatException e){
+				System.err.println("Error parsing interaction " + inter[0]);
+				System.err.println("Interaction not added");
+				continue;
+			}
+			if (rate < 0 || rate > 2){
+				System.err.println("Error parsing secretion rate " + inter[0]);
+				System.err.println("Interaction not added");
+				continue;
+			}
+			Interaction in = new Interaction(recId, tarId, rate, affectPer, satPer, maxResp);
+			sim.writeToLog(type + ": Adding Interaction - " + in.toString());
+			
 		}	
 		return cells;
 	}
 	
-	public void addReceptor(int proID, TraffickingInfo ti){
+		
+	public void addReceptor(int proID, TraffickingInfo ti, int mpb){
 		//Add the TraffickingInfo to the map
 		traffickRates.put(proID, ti);
-		//System.out.println("Seg Cell 383: ");
+		//System.out.println("Seg Cell 451: ");
 		//System.out.println("  secretion: " + ti.getSecretionRate());
 		//System.out.println("  unboundInt: " + ti.getUnboundIntRate());
 		//System.out.println("   boundInt: " + ti.getBoundIntRate());
 		//Find the steady state secretion rate for the whole cell
 		float totalUnbound = ti.getSecretionRate() / ti.getUnboundIntRate();
+		//System.out.println(ti);
 		//System.out.println("   unbound: " + totalUnbound);
 		
 		if (!hasReceptors){
@@ -401,7 +546,7 @@ public class SegmentedCell implements SimObject{
 		}
 		for (int i = 0; i < numSegments; i++){
 			//System.out.println("Seg Cell 392: Adding receptor to cell");
-			membraneSegments[i].addReceptor(proID, totalUnbound * triangleAreas[i]/surfaceArea);
+			membraneSegments[i].addReceptor(proID, totalUnbound * triangleAreas[i]/surfaceArea, mpb);
 		}
 		
 		int[] lig = sim.getProtein(proID).getLigands();
@@ -409,6 +554,10 @@ public class SegmentedCell implements SimObject{
 			receptorsBindTo.add(new Integer(lig[i]));
 		}
 		surfaceProteins.add(new Integer(proID));
+	}
+	
+	public void addInteraction(Interaction i){
+		
 	}
 	
 	public HashSet<Integer> getSurfaceProteins(){
@@ -448,6 +597,9 @@ public class SegmentedCell implements SimObject{
 			Vector3f theirPoint = (collID ==0) ? mp.localPointB : mp.localPointA;
 			theirSegment = theWall.getSurface(theirPoint);
 		}
+		else{
+			//System.out.println("Cell " + myId + ": I've collided with another cell!");
+		}
 		//Get the relevant surface segments
 		SurfaceSegment mySurface = getSurfaceSegment(mySegment);
 		SurfaceSegment theirSurface = c.getSurfaceSegment(theirSegment);
@@ -473,15 +625,12 @@ public class SegmentedCell implements SimObject{
 					//My receptor binds to the ligand on the other's surface
 					//System.out.println("My receptor: " + pro.getName() + " Their ligand: " + sim.getProtein(proId).getName());
 					//Try to make bonds
-					Utilities.makeBonds(sim, p, proId, mySurface, theirSurface);
+					if (Utilities.makeBonds(sim, p, proId, mySurface, theirSurface)>0){
+						segCollided[mySegment] = true;
+					}
 				}
 			}
 		}
-		
-		//collID tells us which is my index in the manifold point.
-		
-		
-		
 	}
 
 	
@@ -518,16 +667,20 @@ public class SegmentedCell implements SimObject{
 		this.body.setGravity(new Vector3f(0, -downForce, 0));
 		long now = sim.getCurrentTimeMicroseconds();
 		long delta = (long)sim.getDeltaTimeMicroseconds();
+	
 		if (delta > 0){
-			Vector3f addVel = getRandomVector(maxDeltaVel);
-			
-			lastDeltaAV = new Vector3f(addVel);
+			//Only move it around if the angular velocity is very small
 			Vector3f oldVel = new Vector3f(0, 0, 0);
 			this.body.getAngularVelocity(oldVel);
-			oldVel.add(addVel);
-			this.body.setAngularVelocity(oldVel);
+			float len = oldVel.length();
+			if (len < .5f){
+				Vector3f addVel = getRandomVector(maxDeltaVel);
+				lastDeltaAV = new Vector3f(addVel);
+				oldVel.add(addVel);
+				this.body.setAngularVelocity(oldVel);
+			}
 		}
-			//Find the current position
+			//Find the current position and velocities
 		this.body.getMotionState().getWorldTransform(trans);
 		Vector3f distance = new Vector3f();
 		distance.sub(trans.origin, lastPosition);
@@ -535,6 +688,24 @@ public class SegmentedCell implements SimObject{
 		lastPosition = new Vector3f(trans.origin);
 		this.body.getAngularVelocity(lastAV);
 		this.body.getLinearVelocity(lastLV);
+		
+		
+		//Clamp the velocities
+		float maxAng = Math.max(Math.max(Math.abs(lastAV.x), Math.abs(lastAV.y)), Math.abs(lastAV.z));
+		if (maxAng > 2 * Math.PI){
+			//sim.startInvestigating();
+			//sim.writeInvestigatingData("Cell " + myId + " has a high angular velocity. \t" + lastAV.toString());
+		}
+		//this.body.setAngularVelocity(lastAV);
+		float maxLin = Math.max(Math.max(Math.abs(lastLV.x), Math.abs(lastLV.y)), Math.abs(lastLV.z));
+		if (maxLin > maxLinVel){
+			//sim.startInvestigating();
+			//sim.writeInvestigatingData("Cell " + myId + " has a high linear velocity. \t" + lastLV.toString());
+		}
+		//this.body.setLinearVelocity(lastLV);
+		if (sim.isInvestigating()){
+			writeOutput();
+		}
 		
 		//TODO We are going to set the axis to be the x for now! 
 		//We probably want the distance from source to be attached to the gradient
@@ -705,7 +876,6 @@ public class SegmentedCell implements SimObject{
 	}
 	
 	public boolean specialRender(IGL gl, Transform t, int m){
-		/*
 		gl.glPushMatrix();
 		t.getOpenGLMatrix(glMat);
 		gl.glMultMatrix(glMat);
@@ -716,8 +886,7 @@ public class SegmentedCell implements SimObject{
 		
 		//Let's draw ours and then theirs and see what happens.
 		
-		return true;*/
-		return false;
+		return true;
 	}
 	
 	private static class drawSegmentsCallback extends TriangleCallback {
@@ -740,12 +909,9 @@ public class SegmentedCell implements SimObject{
 			
 			if (visibleID >= 0){
 				SurfaceSegment seg = parent.membraneSegments[triangleIndex];
-				float percent = seg.getProteinPercentage(visibleID, parent.showingBoundProtein());
+				float percent = seg.getProteinPortion(visibleID, parent.showingBoundProtein());
 				//System.out.println("Segment: " + seg + " percent: " + percent);
-				color = visibleProtein.getColor();
-				for (int i = 0; i < 3; i++){
-					color[i] = color[i] * percent;
-				}
+				color = visibleProtein.getColor(percent);
 			}
 			
 			gl.glBegin(GL11.GL_TRIANGLES);
@@ -757,6 +923,7 @@ public class SegmentedCell implements SimObject{
 			gl.glVertex3f(triangle[2].x, triangle[2].y, triangle[2].z);
 			gl.glEnd();
 			gl.glBegin(GL11.GL_LINES);
+			gl.glLineWidth(3);
 			gl.glColor3f(0f, 0f, 0f);
 			gl.glVertex3f(triangle[0].x, triangle[0].y, triangle[0].z);
 			gl.glVertex3f(triangle[1].x, triangle[1].y, triangle[1].z);
@@ -801,14 +968,15 @@ public class SegmentedCell implements SimObject{
 	
 	public String getSurfaceSegmentOutput(){
 		String s = "";
-		for (int i = 0; i < numSegments; i++){
+		//for (int i = 0; i < numSegments; i++){
+		for (int i = 0; i < 5; i++){
 			s += membraneSegments[i].getOutput(sim);
 		}
 		return s;
 	}
 	
 	public static String getDataHeaders(){
-		String s = "Time Since Sim Start\tCell Type\tCell ID\txPos\tyPos\tzPos\txLastAV\tyLastAV\tzLastAV\txLastDeltaAV\tyLastDeltaAV\tzLastDeltaAV\ttheta\txLastLV\tyLastLV\txLastLV\tCollidedSegments\n";
+		String s = "Time Since Sim Start\tCell Type\tCell ID\txPos\tyPos\tzPos\txLastAV\tyLastAV\tzLastAV\txLastDeltaAV\tyLastDeltaAV\tzLastDeltaAV\txLastLV\tyLastLV\txLastLV\tCollidedSegments\n";
 		return s;
 	}
 	
@@ -839,12 +1007,10 @@ public class SegmentedCell implements SimObject{
 				segCollided[i] = false;
 			}
 		}
-		float hyp = (float)Math.sqrt(lastDeltaAV.x * lastDeltaAV.x + lastDeltaAV.z * lastDeltaAV.z);
-		float sineTheta = lastDeltaAV.z / hyp;
-		float theta = (float)Math.asin(sineTheta);
+		
 		if (outputFile != null){
 			try{
-				outputFile.write(sim.getFormattedTime() + "\t" + cellType + "\t" + myId + "\t" + lastPosition.x + "\t" + lastPosition.y + "\t" + lastPosition.z + "\t" + lastAV.x + "\t" + lastAV.y +"\t" + lastAV.z + "\t" + lastDeltaAV.x +"\t" + lastDeltaAV.y +"\t" + lastDeltaAV.z + "\t" + theta + "\t" + lastLV.x + "\t" + lastLV.y + "\t" + lastLV.z +"\t" + cols +"\n");
+				outputFile.write(sim.getFormattedTime() + "\t" + cellType + "\t" + myId + "\t" + lastPosition.x + "\t" + lastPosition.y + "\t" + lastPosition.z + "\t" + lastAV.x + "\t" + lastAV.y +"\t" + lastAV.z + "\t" + lastDeltaAV.x +"\t" + lastDeltaAV.y +"\t" + lastDeltaAV.z + "\t" + lastLV.x + "\t" + lastLV.y + "\t" + lastLV.z +"\t" + cols +"\n");
 			}
 			catch(IOException e){
 				sim.writeToLog(sim.getFormattedTime() + "\t" + "Unable to write to cell file" + "\t" + e.toString());

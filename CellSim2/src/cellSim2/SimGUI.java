@@ -22,6 +22,7 @@ package cellSim2;
 import java.awt.*;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.awt.event.ActionEvent;
 import java.io.File;
 import java.io.IOException;
@@ -39,13 +40,13 @@ public class SimGUI {
 	 */
 	private static final long serialVersionUID = 1L;
 	private final static int OPENING = 0, OPENSIM = 1, EDITSIM = 2;
-	private final static int EDITPARAM=3;
+	private final static int EDITPARAM=3, EDITCELL=4;
 	private final static String basicFile = "BasicTestFile.txt";
 	private SimGenerator simgen;
 	private JFrame sf;
 	private int state;
 	private Border padding;
-	private Font buttonFont, labelFont, inputFont, textFont;
+	private Font buttonFont, labelFont, inputFont, textFont, warningFont;
 	private File baseDirectory;
 	private JPanel statusPanel;
 	private JLabel statusLabel;
@@ -58,6 +59,7 @@ public class SimGUI {
 		labelFont = new Font(Font.SANS_SERIF, Font.BOLD, 20);
 		inputFont = new Font(Font.SANS_SERIF, Font.PLAIN, 18);
 		textFont = new Font(Font.SANS_SERIF, Font.PLAIN, 18);
+		warningFont = new Font(Font.SANS_SERIF, Font.PLAIN, 16);
 		
 		simgen = null;
 		
@@ -77,10 +79,6 @@ public class SimGUI {
 		}
 		//TODO Do some checking that the user can write to this directory and it exists
 		baseDirectory = f;
-		System.out.println(baseDirectory.toString());
-		System.out.println("base directory is null? " + (baseDirectory == null));
-		System.out.println("base directory exists? " + (baseDirectory.exists()));
-		System.out.println("base directory is direcotry? " + (baseDirectory.isDirectory()));
 		while (!baseDirectory.isDirectory()){
 			baseDirectory = baseDirectory.getParentFile();
 		}
@@ -123,13 +121,13 @@ public class SimGUI {
 	        setPreferredSize(new Dimension(screenWidth, screenHeight));
 	        setLocation(xpos, ypos);
 	        cp.setLayout(new BorderLayout());
-			cp.add(new mainPanel(this), BorderLayout.CENTER);
-			state = OPENING;
-			pack();
+	        state = OPENING;
+	        
+	        cp.add(new mainPanel(this), BorderLayout.CENTER);
+	        pack();
 			validate();
 			repaint();
-	        
-	        setVisible(true);
+			setVisible(true);
 		}
 		
 		public void setState(int st){
@@ -144,7 +142,7 @@ public class SimGUI {
 				case OPENSIM:	while(!parent.isBaseDirectorySet()){
 									parent.setBaseDirectory(new DirectoryPicker(parent).getSelectedFile());
 									if (parent.isBaseDirectorySet()){
-										System.out.println("SimGUI 134: " +parent.getBaseDirectory());
+										//System.out.println("SimGUI 143: " +parent.getBaseDirectory());
 									}
 									else{
 										System.err.println("No directory set");
@@ -158,6 +156,12 @@ public class SimGUI {
 								dp.maxPanel();
 								cp.add(dp, BorderLayout.CENTER);
 								state = EDITPARAM;
+								break;
+				case EDITCELL:
+								CellPanel cellp = new CellPanel(this);
+								cellp.maxPanel();
+								cp.add(cellp, BorderLayout.CENTER);
+								state = EDITCELL;
 								break;
 				default:		
 								cp.add(new mainPanel(this), BorderLayout.CENTER);
@@ -333,6 +337,19 @@ public class SimGUI {
 				noDirectory.setAlignmentX(Component.CENTER_ALIGNMENT);
 				noDirectory.setFont(labelFont);
 				add(noDirectory);
+
+				JButton cancelDefs = new JButton("Cancel");
+				cancelDefs.setAlignmentX(Component.CENTER_ALIGNMENT);
+				cancelDefs.setFont(buttonFont);
+				cancelDefs.setMargin(new Insets(20, 30, 20, 30));
+				cancelDefs.addActionListener( new ActionListener() {
+		            public void actionPerformed(ActionEvent event) {
+		            	System.out.println("Cancel Need Base Directory");
+		            	//Do NOT SAVE!
+		                program.setState(OPENSIM);;
+		            }
+		        });
+				add(cancelDefs);
 			}
 			
 			else{ 
@@ -361,6 +378,7 @@ public class SimGUI {
 			
 				for (int i = 0; i < paramList.length; i++){
 					if (paramList[i] == ""){
+						//Just add an empty line
 						add(Box.createRigidArea(new Dimension(0, 10)));
 						continue;
 					}
@@ -425,7 +443,8 @@ public class SimGUI {
 			repaint();
 		}
 		public void saveValues(){
-			System.out.println("I need to save the default values");
+			System.out.println("Saving the default values");
+			Defaults def = simgen.getValues();
 			//Get the values from the page
 			for (Component c : this.getComponents()){
 				if (c instanceof JPanel) {
@@ -433,26 +452,19 @@ public class SimGUI {
 					JPanel pan = (JPanel)c;
 					Component[] panList = pan.getComponents();
 					if (panList[0] instanceof JLabel && panList[1] instanceof JTextField){
-						System.out.println("This is a default value");
+						//System.out.println("This is a default value");
 						JLabel lab = (JLabel)panList[0];
 						String key = lab.getText();
 						JTextField field = (JTextField)panList[1];
+						//System.out.println(key + ", " + field.getText());
 						String[] valList = new String[1];
 						valList[0] = field.getText();
+						def.addCurrent(key, valList);
 					}
 				}
 			}
-			//Make a new file and write the data out.
-			File maindoc = new File(baseDirectory, basicFile);
-			try{
-				if (maindoc.exists() && maindoc.canWrite()){
-					maindoc.delete();
-					maindoc.createNewFile();
-				}
-			}
-			catch(IOException e){
-				
-			}
+			//Write out the SimGenerator
+			simgen.outputFiles(baseDirectory);
 		}
 	}
 
@@ -475,14 +487,193 @@ public class SimGUI {
 			cellLabel.setFont(labelFont);
 			add(cellLabel);
 			
-			JButton newCell = new JButton("Add New Cell Type");
+			JButton newCell = new JButton("Edit Cells");
 			newCell.setAlignmentX(Component.CENTER_ALIGNMENT);
 			newCell.setFont(buttonFont);
 			newCell.setMargin(new Insets(20, 30, 20, 30));
+			newCell.addActionListener( new ActionListener() {
+	            public void actionPerformed(ActionEvent event) {
+	            	System.out.println("Open Cell Editing");
+	                program.setState(EDITCELL);;
+	            }
+	        });
 			add(newCell);
 			
 			revalidate();
 			repaint();
+		}
+		
+		public void maxPanel(){
+			removeAll();
+			setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+			setBorder(BorderFactory.createEmptyBorder(10, 40, 10, 40));
+			JLabel simTitle = new JLabel("Cell Types");
+			simTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
+			simTitle.setFont(labelFont);
+			add(simTitle);
+			add(Box.createRigidArea(new Dimension(0, 10)));
+			add(Box.createVerticalGlue());
+			
+			if (baseDirectory == null){
+				JLabel noDirectory = new JLabel("You need to set the base directory to continue.");
+				noDirectory.setAlignmentX(Component.CENTER_ALIGNMENT);
+				noDirectory.setFont(labelFont);
+				add(noDirectory);
+			}
+			
+			else{ 
+				if (simgen == null){
+					File defFile = new File(baseDirectory,basicFile);
+					try{
+						defFile.createNewFile();
+						//Will create an empty basic file if one does not exist
+					}
+					catch(IOException e){
+						System.err.println("Cannot create a file in this directory.");
+					}
+					if (defFile.exists()){	
+						simgen = new SimGenerator(defFile, baseDirectory);
+					}
+					else{
+						//The basic file is not there
+						System.err.println("There is a major problem writing to this directory.");
+						System.err.println("Quitting...");
+						System.exit(2);
+					}
+				}
+				
+				JLabel curr = new JLabel("Current Cells");
+				curr.setAlignmentX(Component.CENTER_ALIGNMENT);
+				curr.setFont(labelFont);
+				add(curr);
+				add(Box.createRigidArea(new Dimension(0, 10)));
+				add(Box.createVerticalGlue());
+				
+				Defaults defaults = simgen.getValues();
+				
+				HashMap<String, String> cellData = defaults.getCells();
+				for (String type: cellData.keySet()){
+					JPanel p = new JPanel();
+					JLabel n = new JLabel(type);
+					n.setAlignmentX(Component.CENTER_ALIGNMENT);
+					n.setFont(labelFont);
+					p.add(n);
+					JButton ed = new JButton("Edit");
+					ed.setFont(buttonFont);
+					p.add(ed);
+					JButton rem = new JButton("Remove");
+					rem.setFont(buttonFont);
+					p.add(rem);
+					add(p);
+				}
+				add(Box.createVerticalGlue());
+				
+				String[] paramList = defaults.getParamList("Cell");
+				JLabel nCell = new JLabel("Add A Cell Type");
+				nCell.setAlignmentX(Component.CENTER_ALIGNMENT);
+				nCell.setFont(labelFont);
+				add(nCell);
+				String outputString = "";
+				
+				JPanel topPanel = new JPanel(new GridLayout(1,2));
+				JPanel leftPanel = new JPanel();
+				leftPanel.setLayout(new BoxLayout(leftPanel, BoxLayout.Y_AXIS));
+				leftPanel.setBorder(BorderFactory.createEmptyBorder(10, 30, 10, 30));
+				leftPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+				JPanel rightPanel = new JPanel();
+				rightPanel.setLayout(new BoxLayout(rightPanel, BoxLayout.Y_AXIS));
+				
+				JButton addNew = new JButton("Add New Cell");
+				addNew.setAlignmentX(Component.CENTER_ALIGNMENT);
+				addNew.setFont(buttonFont);
+				leftPanel.add(addNew);
+				leftPanel.add(Box.createVerticalGlue());
+				
+				for (int i = 0; i < paramList.length; i++){
+					if (paramList[i] == ""){
+						//Just add an empty line
+						rightPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+						continue;
+					}
+					JPanel p = new JPanel();
+					p.setLayout(new FlowLayout(FlowLayout.RIGHT, 10, 5));
+				
+					String key = paramList[i];
+
+					String value = Defaults.getSpecialDefault("Cell", key);
+					String tit = defaults.getStringTitle(key);
+					//System.out.println(key + " " + tit + " "+ value);
+					JLabel text = new JLabel(tit);
+					text.setHorizontalAlignment(JLabel.CENTER);
+					text.setFont(textFont);
+					p.add(text);
+					JTextField inp = new JTextField(value, 10);
+					inp.setFont(inputFont);
+					inp.setHorizontalAlignment(JTextField.RIGHT);
+					p.add(inp);
+					rightPanel.add(p);
+					if (key.equals("Name")){
+						JLabel t = new JLabel("(No spaces or special characters)");
+						t.setFont(warningFont);
+						rightPanel.add(t);
+					}
+					
+				}
+				//Add the option to add in a receptor
+				topPanel.add(leftPanel);
+				topPanel.add(rightPanel);
+				add(topPanel);
+				add(Box.createRigidArea(new Dimension(0, 10)));
+				add(Box.createVerticalGlue());
+			}
+			//Now put in the Cancel/Update button
+			JPanel closeCancel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+			JButton cancelDefs = new JButton("Cancel");
+			cancelDefs.setAlignmentX(Component.CENTER_ALIGNMENT);
+			cancelDefs.setFont(buttonFont);
+			cancelDefs.setMargin(new Insets(20, 30, 20, 30));
+			cancelDefs.addActionListener( new ActionListener() {
+	            public void actionPerformed(ActionEvent event) {
+	            	System.out.println("Done Editing Cells");
+	            	//Do NOT SAVE!
+	                program.setState(OPENSIM);;
+	            }
+	        });
+			closeCancel.add(cancelDefs);
+			if (simgen != null){
+				JButton closeDefs = new JButton("Update Changes");
+				closeDefs.setAlignmentX(Component.CENTER_ALIGNMENT);
+				closeDefs.setFont(buttonFont);
+				closeDefs.setMargin(new Insets(20, 30, 20, 30));
+				closeDefs.addActionListener( new ActionListener() {
+					public void actionPerformed(ActionEvent event) {
+						System.out.println("Save Cell Parameters");
+						//TODO Do the saving / editing here
+						//Need to iterate through the component panels
+						//DefaultsPanel dp = (DefaultsPanel)(closeDefs.getParent().getParent());
+						//dp.saveValues();
+						program.setState(OPENSIM);;
+					}
+				});
+				closeCancel.add(closeDefs);
+			}
+			
+			add(closeCancel);
+			
+			revalidate();
+			repaint();
+		}
+		
+		public void removeCellType(String type){
+			
+		}
+		
+		public void updateCellData(String[] updates){
+			
+		}
+		
+		public void addNewCellType(String name, String[] data){
+			
 		}
 	}
 	
@@ -504,7 +695,7 @@ public class SimGUI {
 			proTitle.setFont(labelFont);
 			add(proTitle);
 			
-			JButton newPro = new JButton("Add New Protein");
+			JButton newPro = new JButton("Edit Proteins");
 			newPro.setAlignmentX(Component.CENTER_ALIGNMENT);
 			newPro.setFont(buttonFont);
 			newPro.setMargin(new Insets(20, 30, 20, 30));
@@ -533,7 +724,7 @@ public class SimGUI {
 			gradTitle.setFont(labelFont);
 			add(gradTitle);
 			
-			JButton newGrad = new JButton("Add New Gradient");
+			JButton newGrad = new JButton("Edit Gradients");
 			newGrad.setAlignmentX(Component.CENTER_ALIGNMENT);
 			newGrad.setFont(buttonFont);
 			newGrad.setMargin(new Insets(20, 30, 20, 30));

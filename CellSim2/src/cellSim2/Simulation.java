@@ -81,18 +81,21 @@ public class Simulation extends DemoApplication{
 	private long lastImageTime;
 	private float averageDeltaTime;
 	private long numFrames;
+	private float meanConstraints;
 	private long randomCalls;
 	//private SimObject[][] processedCollisions;
 	
 	private Random random;
+	private long randomSeed;
 	
-	private BufferedWriter logFile, cellData, wallData, gradientTestFile, constraintFile, segmentData;
+	private BufferedWriter logFile, cellData, wallData, gradientTestFile, constraintFile, segmentData, investigatingData;
 	private ObjectArrayList<BufferedWriter> gradientDataFiles;
 	private File imageFile;
 	
 	int testWidth;
+	private boolean investigating;
 	
-	public Simulation(IGL gl, SimGenerator s) {
+	public Simulation(IGL gl, SimGenerator s, long seed) {
 		super(gl);
 		simValues = s;
 		modelObjects = new ObjectArrayList<SimObject>();
@@ -106,6 +109,8 @@ public class Simulation extends DemoApplication{
 		averageDeltaTime = 0f;
 		numFrames = 0;
 		randomCalls = 0;
+		meanConstraints = 0;
+		investigating = false;
 		
 		simCurrentTime = realStartTime;
 		simDeltaTime = (long)(1000000f/60) * simValues.speedUp;
@@ -115,7 +120,7 @@ public class Simulation extends DemoApplication{
 		lastImageTime = -1;
 		
 		
-		random = new Random();
+		random = new Random(seed);
 		gradientDataFiles = new ObjectArrayList<BufferedWriter>();
 		testWidth = 1200;
 				
@@ -134,14 +139,14 @@ public class Simulation extends DemoApplication{
 				gradData.write(simValues.gradients.get(i).getDataHeaders());
 				g.setOutputFile(gradData);
 			}
-			/*
+			
 			gradientTestFile = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "gradientTest.csv")));
 			String str = "Time Since Start\tProtein";
 			for (int i = 0; i < testWidth; i+=100){
 				str += "\t" + i;
 			}
 			str += "\n";
-			gradientTestFile.write(str);*/
+			gradientTestFile.write(str);
 			constraintFile = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "constraintData.csv")));
 			constraintFile.write(BondConstraint.getDataHeaders());
 			segmentData = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "segmentData.csv")));
@@ -152,6 +157,8 @@ public class Simulation extends DemoApplication{
 					imageFile.mkdir();
 				}
 			}
+			investigatingData = new BufferedWriter(new FileWriter(new File(simValues.getOutputDir(), "investigatingData.csv")));
+			investigatingData.write("Time\tType\tID\t\n");
 		}
 		catch (IOException e){
 			System.err.println("Cannot generate output files!");
@@ -162,9 +169,14 @@ public class Simulation extends DemoApplication{
 			imageGen = new ImageGenerator(imageFile, simValues.screenWidth, simValues.screenHeight, 4);
 		}
 		
-		BulletGlobals.setContactAddedCallback(new SimContactAddedCallback());
-		//processedCollisions = new SimObject [0][2];
+		//BulletGlobals.setContactAddedCallback(new SimContactAddedCallback());
+		
 		writeToLog(getFormattedTime() + "\tInitialization Complete");
+		writeToLog(getFormattedTime() + "\tSeed: " + seed);
+	}
+	
+	public Simulation(IGL gl, SimGenerator s){
+		this(gl, s, (long)(Math.random()*Long.MAX_VALUE));
 	}
 	
 	@Override
@@ -195,7 +207,7 @@ public class Simulation extends DemoApplication{
 		if (needGImpact){
 			GImpactCollisionAlgorithm.registerAlgorithm(dispatcher);
 		}
-		
+		//System.out.println("needGImpact: " + needGImpact);
 		
 		writeToLog(getFormattedTime() + "\tFinished Init Physics");
 	}
@@ -221,6 +233,70 @@ public class Simulation extends DemoApplication{
 			lastDataOutput = simCurrentTime;
 		}
 		int numObjects = modelObjects.size();
+		/*
+		String time = getFormattedTime();
+		//System.out.println(time);
+		String hours = time.substring(0, 2);
+		String minutes = time.substring(3, 5);
+		String secs = time.substring(6, 8);
+		int numMin = Integer.parseInt(minutes);
+		int numSec = Integer.parseInt(secs);
+		int numHours = Integer.parseInt(hours);
+		if ((numHours == 1 && numMin == 6) || (numHours == 5 && numMin == 19)){
+			investigating = true;
+		}
+		else{
+			investigating = false;
+		}*/
+		long clockTime = clock.getTimeMicroseconds();
+		realDeltaTime = clockTime - realCurrentTime;
+		realCurrentTime = clockTime - realStartTime;
+		numFrames++;
+		
+		simCurrentTime = simCurrentTime + simDeltaTime;
+		// step the simulation
+		if (dynamicsWorld != null) {
+					float time_step = simDeltaTime / 1000000f; //convert microseconds to seconds
+					//int max_substeps = (int)Math.ceil(simValues.speedUp+1);
+					//dynamicsWorld.stepSimulation(time_step, (simValues.speedUp+1));
+					for (int x = 0; x < simValues.speedUp; x++){
+						dynamicsWorld.stepSimulation(1f/60f);
+					}
+					// optional but useful: debug drawing
+					dynamicsWorld.debugDrawWorld();
+
+				}
+				
+				//writeInvestigatingData("\n" + getFormattedTime() + " - Dealing with collisions\n\n");
+				int numManifolds = dynamicsWorld.getDispatcher().getNumManifolds();
+				//writeInvestigatingData("Num Manifolds: " + numManifolds + "\n");
+				for (int i=0;i<numManifolds;i++){
+					PersistentManifold contactManifold =  dynamicsWorld.getDispatcher().getManifoldByIndexInternal(i);
+					SimRigidBody rbA = (SimRigidBody)contactManifold.getBody0();
+					SimRigidBody rbB = (SimRigidBody)contactManifold.getBody1();
+					SimObject objectA = rbA.getParent(), objectB = rbB.getParent();
+					//writeInvestigatingData(i + ": Object A: " + objectA.getType() + objectA.getID() + " Object B: " + objectB.getType() + objectB.getID() + "\n");
+					if (objectA.collidedWith(objectB) | objectB.collidedWith(objectA)){
+						//Only deal with one collision per object pair
+						writeInvestigatingData("Already collided\n");
+						continue;
+					}
+					//writeInvestigatingData(contactManifold.getNumContacts() + " points in manifold\n");
+					int pointIndex = (int)(contactManifold.getNumContacts()*getNextRandomF());
+					//writeInvestigatingData("Looking at contact point " + pointIndex+"\n");
+					ManifoldPoint mp = contactManifold.getContactPoint(pointIndex);
+					int idA = mp.index0, idB = mp.index1;
+					if (objectA.getType().equals("Wall") && !objectB.getType().equals("Wall")){
+						objectB.collided(objectA,  mp, 1);
+					}
+					else if (objectB.getType().equals("Wall") && !objectA.getType().equals("Wall")){
+						objectA.collided(objectB,  mp, 0);
+					}
+					else{
+						objectA.collided(objectB, mp, 0);
+					}
+				}//end for i
+
 		
 		boolean mobileObjs = false;
 		//Vector3f testVec = new Vector3f();
@@ -248,31 +324,19 @@ public class Simulation extends DemoApplication{
 				//remConstraints++;
 			}
 		}
+		//writeInvestigatingData(getFormattedTime() + " Num constraints: " + constraints.size() + "\n");
 		//System.out.println("Removed: " + remConstraints + " constraints.");
 		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		long clockTime = clock.getTimeMicroseconds();
-		realDeltaTime = clockTime - realCurrentTime;
-		realCurrentTime = clockTime - realStartTime;
-		numFrames++;
 		averageDeltaTime = (averageDeltaTime * (numFrames-1) + realDeltaTime) / numFrames;
-		
-		simCurrentTime = simCurrentTime + simDeltaTime;
-		
-		
-		// step the simulation
-		if (dynamicsWorld != null) {
-			float time_step = simDeltaTime / 1000000f; //convert microseconds to seconds
-			//int max_substeps = (int)Math.ceil(simValues.speedUp+1);
-			//dynamicsWorld.stepSimulation(time_step, (simValues.speedUp+1));
-			for (int x = 0; x < simValues.speedUp; x++){
-				dynamicsWorld.stepSimulation(1f/60f);
-			}
-			// optional but useful: debug drawing
-			dynamicsWorld.debugDrawWorld();
-
-		}
-		
+		meanConstraints = (meanConstraints * (numFrames-1) + numConstraints) / numFrames;
+		/*
+		writeToLog("realDeltaTime\t" + realDeltaTime);
+		writeToLog("averageDeltaTime\t" + averageDeltaTime);
+		writeToLog("meanConstraints\t" + meanConstraints);
+		writeToLog("numConstraints\t" + numConstraints);
+		writeToLog("numFrames" + numFrames);*/
+				
 		//Remove any objects that have moved out of range 
 		//We go through them backwards so that we don't mess up the indices
 		Vector3f tempMin = new Vector3f();
@@ -292,14 +356,16 @@ public class Simulation extends DemoApplication{
 				}
 			}
 			if (!inside){
+				bioObj.getRigidBody().getCenterOfMassPosition(tempMin);
 				bioObj.writeOutput();
 				writeToLog(bioObj.finalOutput());
-				writeToLog(bioObj.toString() + " removed at " + getFormattedTime());
+				writeToLog(bioObj.toString() + " removed at " + getFormattedTime() + "\t" + tempMin.toString());
 				removeSimulationObject(bioObj);
 				bioObj.destroy();
 			}
 		}
 		
+		investigating = false;
 
 		if (simValues.displayImages){
 			renderme();
@@ -318,6 +384,22 @@ public class Simulation extends DemoApplication{
 		setCameraDistance(baseCameraDistance);
 		ele = 0f;
 		updateCamera();
+		
+		float[] light_ambient = new float[] { 0.7f, 0.7f, 0.7f, 1.0f };
+		float[] light_diffuse = new float[] { 1.0f, 1.0f, 1.0f, 1.0f };
+		float[] light_position0 = new float[] { 1.0f, 50.0f, -1.0f, 0.0f };
+		gl.glLight(GL_LIGHT0, GL_AMBIENT, light_ambient);
+		//gl.glLight(GL_LIGHT0, GL_DIFFUSE, light_diffuse);
+		gl.glLight(GL_LIGHT0, GL_POSITION, light_position0);
+		gl.glEnable(GL_LIGHTING);
+		gl.glEnable(GL_LIGHT0);
+		
+		gl.glShadeModel(GL_SMOOTH);
+		gl.glEnable(GL_DEPTH_TEST);
+		gl.glDepthFunc(GL_LESS);
+
+		gl.glClearColor(0.7f, 0.7f, 0.7f, 0f);
+		
 		writeToLog(getFormattedTime() + "\tMyInit Complete");
 	}
 	
@@ -455,7 +537,7 @@ public class Simulation extends DemoApplication{
 			Gradient g = simValues.gradients.get(i);
 			g.writeOutput(this);
 			//Debugging
-			/*
+			
 			String s = getFormattedTime() + "\t" + getProteinName(g.getProtein());
 			for (int j = 0; j < testWidth; j+=100){
 				s = s + "\t" + g.getConcentration(simCurrentTime, new Vector3f(j, 0, 0));
@@ -466,7 +548,7 @@ public class Simulation extends DemoApplication{
 			}
 			catch(IOException e){
 				System.err.println("Could not write to gradient test file");
-			}*/
+			}
 		}
 		//writeToLog("Constraints\t" + constraints.size() + "\n");
 		
@@ -562,6 +644,14 @@ public class Simulation extends DemoApplication{
 		return random.nextFloat();
 	}
 	
+	public boolean isInvestigating(){
+		return investigating;
+	}
+	
+	public void startInvestigating(){
+		investigating = true;
+	}
+	
 	public boolean readyToQuit(){
 		return finished;
 	}
@@ -579,6 +669,17 @@ public class Simulation extends DemoApplication{
 		lastImageTime = simCurrentTime;
 	}
 	
+	public void writeInvestigatingData(String s){
+		if (investigatingData != null){
+			try{
+				investigatingData.write(s);
+			}
+			catch(IOException e){
+				System.err.println("Error writing to investigatingData file! ");
+				System.err.println(e.toString());
+			}
+		}
+	}
 	public void writeToLog(String s){
 		if (logFile != null){
 			try{
@@ -598,15 +699,20 @@ public class Simulation extends DemoApplication{
 	public void wrapUp(){
 		writeToLog("\n" + getFormattedTime() + "\tFinishing Up");
 		writeToLog("Current sim time (microseconds)\t" + simCurrentTime);
-		writeToLog("Actual clock time (real microseconds)\t" + clock.getTimeMicroseconds());
-		writeToLog("Actual time in minutes\t" + String.format("%.3f", clock.getTimeMicroseconds()/1000000f/60f));
-		writeToLog("Mean frame time (real microseconds)\t" + averageDeltaTime);
-		writeToLog("Mean frames per second\t" + (int)(1000000/averageDeltaTime));
+		writeToLog("Simulation time in minutes\t" + String.format("%.3f", simCurrentTime/1000000f/60f));
+		writeToLog("Actual clock time (real microseconds) \t" + (realCurrentTime));
+		writeToLog("Actual clock time in minutes\t" + String.format("%.3f", realCurrentTime/1000000f/60f));
+		writeToLog("Number of frames\t" + numFrames);
+		writeToLog("AverageDeltaTime (real microseconds)\t" + averageDeltaTime);
+		writeToLog("Average frame time\t" + (float)realCurrentTime/numFrames);
+		writeToLog("Mean frames per second\t" + (int)(1000000.0 * (float)numFrames/realCurrentTime));
+		//writeToLog("currentTime frames Per second\t" + (int)(1000000.0/((float)realCurrentTime/numFrames)));
+		writeToLog("Mean number of constraints per frame\t" + meanConstraints);
 		//writeToLog("Number of calls to random\t" + randomCalls);
 		int numObjects = modelObjects.size();
 		for (int i = 0; i < numObjects; i++){
 			SimObject bioObj = modelObjects.getQuick(i);
-			writeToLog(bioObj.finalOutput());
+			writeToLog(bioObj.getType() + "\t" + bioObj.getID() + "\t" + bioObj.finalOutput());
 			try{
 				segmentData.write(bioObj.getSurfaceSegmentOutput());
 			}
@@ -620,7 +726,7 @@ public class Simulation extends DemoApplication{
 			int numConstraints = constraints.size();
 			//writeToLog("Constraints\t"+numConstraints);
 			if (simCurrentTime < simValues.endTime*1e6){
-				writeToLog("Time Not Complete\t" + simCurrentTime);
+				writeToLog("Time Not Complete");
 			}
 			for (int i = 0; i < numConstraints; i++){
 				BondConstraint bc = constraints.getQuick(i);
@@ -637,6 +743,9 @@ public class Simulation extends DemoApplication{
 			wallData.close();
 			segmentData.flush();
 			segmentData.close();
+			investigatingData.flush();
+			investigatingData.close();
+			BondConstraint.closeWriter();
 			
 			for (int i = 0; i < gradientDataFiles.size(); i++){
 				gradientDataFiles.get(i).flush();

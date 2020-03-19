@@ -20,7 +20,9 @@
 package cellSim2;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -43,10 +45,10 @@ import org.lwjgl.LWJGLException;
 public class SimGenerator {
 	public static float[][]colorList = new float[][]{
 		  { 1.0f, 0.0f, 0.0f },//red
+		  { 0.0f, 0.9f, 0.9f}, //cyan
+		  { 0.5f, 0.5f, 0.1f},//blue
 		  { 0.0f, 1.0f, 0.0f },//green
-		  { 0.0f, 0.0f, 0.1f},//blue
 		  { 1.0f, 0.5f, 0.0f},//orange
-		  { 0.0f, 1.0f, 1.0f}, //cyan
 		  { 1.0f, 0.5f, 1.0f}, //violet
 		  { 1.0f, 1.0f, 0.0f}, //yellow
 		  { 0.0f, 0.0f, 1.0f}, //blue
@@ -55,6 +57,7 @@ public class SimGenerator {
 	private File inputFile;
 	private File outputDir;
 	private Defaults simValues;
+	private final static String basicFile = "BasicTestFile.txt";
 	
 	public int screenWidth;
 	public int screenHeight;
@@ -97,12 +100,6 @@ public class SimGenerator {
 		//for (int i = 0; i < proteins.size(); i++){
 		//	proteins.get(i).print(System.out);
 		//}
-		try{
-			Protein.setMolsPerBond(simValues.getValue(0, "molsPerBond"));
-		}
-		catch(SimException e){
-			System.err.println("Could not set molsPerBond - using default"); 
-		}
 		//System.out.println("Proteins created");
 		gradients = new ArrayList<Gradient>();
 		createGradients();
@@ -185,7 +182,7 @@ public class SimGenerator {
 				System.err.println("Protein " + key + " not in protein list. Gradient not made.");
 				continue;
 			}
-			//System.out.println("SG 188: Gradient of " +  key);
+			//System.out.println("SG 191: Gradient of " +  key);
 			//Does this gradient exist already?
 			Gradient g = null;
 			for (int i = 0; i < gradients.size(); i++){
@@ -206,7 +203,7 @@ public class SimGenerator {
 					//only valid parameters are "zero" or "file"
 					if (param.equalsIgnoreCase("file")){
 						//System.out.println("SG175 param: " + param);
-						g = new FileGradient(proId, line[1], colorList[proId%colorList.length]);
+						g = new FileGradient(proteins.get(proId), line[1]);
 						FileGradient test = (FileGradient)g;
 						if (!test.successfullyMade()){
 							System.err.println("FileGradient " + key + " not successful.");
@@ -266,6 +263,7 @@ public class SimGenerator {
 	}
 	
 	public void createWalls(Simulation sim){
+		//System.out.println("SimGen 272 - Create walls");
 		ArrayList<Wall> walls = new ArrayList<Wall>();
 		Vector3f vesselSize = new Vector3f();
 		try{
@@ -278,9 +276,9 @@ public class SimGenerator {
 		//System.out.println("Vessel size: " + vesselSize.toString());
 		float channelWidth = vesselSize.x, channelHeight = vesselSize.y, channelDepth = vesselSize.z;
 		float wallThick = 2f;
-		startX = (-channelWidth+wallThick)/2.0f;
+		//startX = (-channelWidth+wallThick)/2.0f;
 		//System.out.println("startX = " + startX);
-		float[] wallColor = {.9f, .6f, .6f};
+		//float[] wallColor = {.9f, .6f, .6f};
 		Wall nextWall;
 		Vector3f position = new Vector3f(0f, 0f, 0f);
 		
@@ -288,8 +286,8 @@ public class SimGenerator {
 		//bottom
 		position.set(0f, -(float)((channelHeight+wallThick)/2.0), 0f);
 		nextWall = new Wall(sim, channelWidth, wallThick, channelDepth, position); 
-		nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
-		nextWall.setVisible(false);
+		//nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
+		nextWall.setVisible(true);
 		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
 		//System.out.println("Bottom: " + nextWall.toString());
@@ -297,7 +295,7 @@ public class SimGenerator {
 		//top
 		position.set(0f, (float)((channelHeight+wallThick)/2.0), 0f);
 		nextWall = new Wall(sim, channelWidth, wallThick, channelDepth, position); 
-		nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
+		//nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
 		nextWall.setVisible(true);
 		nextWall.setOutputFile(sim.getWallFile());
 		walls.add(nextWall);
@@ -307,41 +305,41 @@ public class SimGenerator {
 		//back
 		position.set(0f, 0f, (float)((channelDepth+wallThick)/2.0));
 		nextWall = new Wall(sim, channelWidth, channelHeight, wallThick, position); 
-		nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
+		//nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
 		nextWall.setVisible(true);
 		nextWall.setOutputFile(sim.getWallFile());
-		//walls.add(nextWall);
+		walls.add(nextWall);
 		//System.out.println("Back: " + nextWall.toString());
-		//System.out.println("SG 315 - Create walls");
-		/*
+		
+		
 		//front
 		position.set(0f, 0f, -(float)((channelDepth+wallThick)/2.0));
 		nextWall = new Wall(sim, channelWidth, channelHeight, wallThick, position); 
-		nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
+		//nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
 		nextWall.setVisible(false);
 		nextWall.setOutputFile(sim.getWallFile());
-		//walls.add(nextWall);
+		walls.add(nextWall);
 		//System.out.println("Front: "+nextWall.toString());
 		
 		
 		//left
 		position.set((float)((channelWidth+wallThick)/2.0), 0f, 0f);
 		nextWall = new Wall(sim, wallThick, channelHeight, channelDepth, position); 
-		nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
+		//nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
 		nextWall.setVisible(false);
 		nextWall.setOutputFile(sim.getWallFile());
-		walls.add(nextWall);
-		//System.out.println("Left: " + nextWall.toString());*/
+		//walls.add(nextWall);
+		//System.out.println("Left: " + nextWall.toString());
 		
-		/*
+		
 		//right
 		position.set((float)((-channelWidth+wallThick)/2.0), 0f, 0f);
 		nextWall = new Wall(sim, wallThick, channelHeight, channelDepth, position); 
-		nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
+		//nextWall.setWallColor(wallColor[0], wallColor[1], wallColor[2]);
 		nextWall.setVisible(false);
 		nextWall.setOutputFile(sim.getWallFile());
-		walls.add(nextWall);
-		//System.out.println("Right: " + nextWall.toString());*/
+		//walls.add(nextWall);
+		//System.out.println("Right: " + nextWall.toString());
 		
 		sim.setBaseCameraDistance((float)((channelWidth/2)*(1.05)*Math.tan(Math.PI/3)));
 		
@@ -678,9 +676,35 @@ public class SimGenerator {
 		return grad;
 	}
 	
+	public void outputFiles(File dir){
+		try{
+			//Write the default values from Defaults to the base file
+			File baseFile = new File(dir, basicFile);
+			PrintStream out = new PrintStream(baseFile);
+			getValues().printDefaultValues(out);
+			//Write each cell file 
+			//Write each protein file
+			//Write each gradient file
+			//Write each wall file
+			out.flush();
+			out.close();
+		}
+		catch (FileNotFoundException e){
+			System.err.println("SimGenerator 696: File to write not found");
+		}
+		catch (IOException f){
+			System.err.println("SimGenerator 699: Output error writing output files");
+		}
+	}
+	
 	public static void main (String[] args){
 		//System.out.println("Sim Generator Is Running\n");
 		SimGenerator sg = new SimGenerator(new File(args[0]), new File(args[1]));
+		long seed = -1;
+		if (args.length > 2){
+			seed = Integer.getInteger(args[2]);
+		}
+		//seed = 3066472563200689152L;
 		//System.out.println(sg);
 
 		boolean showScreen = true;
@@ -690,7 +714,13 @@ public class SimGenerator {
 			screenwidth = 10;
 			screenheight = 10;
 		}
-		Simulation sim = new Simulation(SimLWJGL.getGL(), sg);
+		Simulation sim = null;
+		if (seed < 0){
+			sim = new Simulation(SimLWJGL.getGL(), sg);
+		}
+		else{
+			sim = new Simulation(SimLWJGL.getGL(), sg, seed);
+		}
 		sim.initPhysics();
 		sim.getDynamicsWorld().setDebugDrawer(new GLDebugDrawer(SimLWJGL.getGL()));
 

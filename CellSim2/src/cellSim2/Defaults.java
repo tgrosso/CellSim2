@@ -50,7 +50,7 @@ public class Defaults {
 		defaults.put("secBetweenImages", new String[]{"1"});
 		defaults.put("speedUp", new String[]{"1"});
 		defaults.put("startX", new String[]{"0"});
-		defaults.put("molsPerBond", new String[]{"100"});
+		//defaults.put("molsPerBond", new String[]{"100"});
 	}
 	
 	private static final HashMap<String, String> defaultTitles = new HashMap<String, String>();
@@ -59,16 +59,16 @@ public class Defaults {
 		defaultTitles.put("screenWidth", "Screen Width (pixels)");
 		defaultTitles.put("screenHeight", "Screen Height (pixels)");
 		defaultTitles.put("endTime", "End Time (seconds)");
-		defaultTitles.put("displayImages", "Display Images");
+		defaultTitles.put("displayImages", "Display Images (True/False)");
 		defaultTitles.put("vessel", "Vessel Size (x, y, z pixels)");
 		defaultTitles.put("vesselColor", "Vessel Color (r, g, b)");
 		defaultTitles.put("distFromSource", "Distance from Source (microns)");
-		defaultTitles.put("generateImages", "Generate Images");
+		defaultTitles.put("generateImages", "Generate Images (True/False)");
 		defaultTitles.put("secBetweenOutput", "Seconds Betwen Data Output");
 		defaultTitles.put("secBetweenImages", "Seconds Between Image Output");
 		defaultTitles.put("speedUp", "Acceleration Value");
 		defaultTitles.put("startX", "startX - What is this?");
-		defaultTitles.put("molsPerBond", "Molecules Per Bond");
+		//defaultTitles.put("molsPerBond", "Molecules Per Bond");
 		defaultTitles.put("Name", "Name or Type");
 		defaultTitles.put("numCells", "Number of Cells");
 		defaultTitles.put("cellDetailLevel", "Cell Detail Level (1-3)");
@@ -84,13 +84,13 @@ public class Defaults {
 	private static final String[] paramOrder = new String[] {"TimeZone", "", "endTime", "secBetweenOutput", "secBetweenImages", "", "screenWidth", "screenHeight", "", 
 				"molsPerBond"};
 	
-	private static final String[] cellOrder = new String[] {"TimeZone"};
+	private static final String[] cellOrder = new String[] {"Name", "numCells", "cellDetailLevel", "radius", "density", "maxDeltaVel"};
 	private static final String[] proteinOrder = new String[] {"TimeZone"};
 	
 	
 	private static final HashMap<String, String> cellDefaults = new HashMap<String, String>();
 	static{
-		cellDefaults.put("Name", "Unnamed Cell Type");
+		cellDefaults.put("Name", "No Name");
 		cellDefaults.put("numCells", "5");
 		cellDefaults.put("cellDetailLevel", "1");
 		cellDefaults.put("radius", "10");
@@ -308,27 +308,39 @@ public class Defaults {
 			String key = entry.getKey();
 			if (currentVals.containsKey(key)){
 				String vals = String.join("\t", Arrays.asList(currentVals.get(key)));
-				ps.println(key + ": " + vals);
+				ps.println(key + "\t" + vals);
 			}
 			else{
 				String vals = String.join("\t", Arrays.asList(entry.getValue()));
-				ps.println(key + ": " + vals);
+				ps.println(key + "\t" + vals);
 			}
 		}
 	}
 	
 	public boolean addCurrent(String k, String[] v){
 		k = k.trim();
-		for (int i = 0; i < v.length; i++){
-			v[i] = v[i].trim();
+		//System.out.print("k is " + k);
+		//We need the formal key
+		if (defaultTitles.containsValue(k)){
+			//Iterate through set of keys and find the key with k as a value
+			for (String key : defaultTitles.keySet()){
+				if (defaultTitles.get(key)==k){
+					k = key;
+					break;
+				}
+			}
 		}
-		if (!defaults.containsKey(k)){
-			String vals = String.join("\t", Arrays.asList(v));
-			System.err.println("Variable " + k + " not found. (" + k + ", " + vals + " not added.");
-			return false;
+		//System.out.println(" and now k is " + k);
+		if (defaults.containsKey(k)){
+			//If the value for this is different than defaults, add to Current Vals
+			if (v[0]  != defaults.get(k)[0]){
+				currentVals.put(k, v);
+			}
+			return true;
 		}
-		currentVals.put(k, v);
-		return true;
+		
+		System.err.println("Could not add parameter: " + k + ": " + v[0]);
+		return false;
 	}
 	
 	public static String getSpecialDefault(String type, String key){
@@ -343,6 +355,7 @@ public class Defaults {
 			return("");
 		}
 	}
+	
 	
 	public HashMap<String, String> getProteins(){
 		return proteins;
